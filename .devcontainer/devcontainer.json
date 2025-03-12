@@ -19,9 +19,16 @@
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// Install xdg-utils (which includes xdg-open)
 	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y xdg-utils",
+	
 
 	// Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"mhutchie.git-graph"
+			]
+		}
+	}
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
