@@ -1,0 +1,82 @@
+env:
+  - GO111MODULE=on
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: arm
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+archives:
+  - name_template: >-
+      {{- .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - completions/*
+checksum:
+  name_template: '{{ .ProjectName }}_checksums.txt'
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - Merge pull request
+      - Merge branch
+      - go mod tidy
+brews:
+  - repository:
+      owner: hupe1980
+      name: homebrew-mwaacli
+    homepage:  https://github.com/hupe1980/mwaacli
+    description: mwaacli is a CLI for interacting with MWAA
+    license: MIT
+    test: |
+      system "#{bin}/mwaacli -v"
+    install: |-
+      bin.install "mwaacli"
+      bash_completion.install "completions/mwaacli.bash" => "mwaacli"
+      zsh_completion.install "completions/mwaacli.zsh" => "_mwaacli"
+      fish_completion.install "completions/mwaacli.fish"
+nfpms:
+  - file_name_template: '{{ .ProjectName }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    homepage:  https://github.com/hupe1980/mwaacli
+    maintainer: Frank Hübner <frankhuebner1980@gmail.com>
+    description: mwaacli is a CLI for interacting with MWAA
+    license: MIT
+    contents:
+      - src: ./completions/mwaacli.bash
+        dst: /etc/bash_completion.d/mwaacli
+      - src: ./completions/mwaacli.fish
+        dst: /usr/share/fish/completions/mwaacli.fish
+      - src: ./completions/mwaacli.zsh
+        dst: /usr/local/share/zsh/site-functions/_mwaacli
+    formats:
+    - apk
+    - deb
+    - rpm
