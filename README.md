@@ -13,9 +13,10 @@ It provides an easy way to manage MWAA environments, execute Airflow CLI command
 
 ## 📦 Installation
 
-### Using Homebrew (MacOS & Linux)
+### Using Homebrew (MacOS)
 ```sh
-brew install hupe1980/tap/mwaacli
+brew tap hupe1980/mwaacli
+brew install mwaacli
 ```
 
 ### Manual Installation
