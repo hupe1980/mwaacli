@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/hupe1980/mwaacli/pkg/config"
@@ -46,11 +44,7 @@ func newListEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 				return err
 			}
 
-			for _, env := range environments {
-				cmd.Println(env)
-			}
-
-			return nil
+			return printJSON(cmd, environments)
 		},
 	}
 
@@ -76,39 +70,25 @@ func newGetEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
 				return err
 			}
 
+			ctx := context.Background()
 			var mwaaEnvName string
 			if len(args) > 0 {
 				mwaaEnvName = args[0]
 			}
 
-			ctx := context.Background()
-
 			if mwaaEnvName == "" {
-				environments, err := client.ListEnvironments(ctx)
+				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {
-					return fmt.Errorf("failed to list environments: %w", err)
+					return err
 				}
-
-				if len(environments) != 1 {
-					return fmt.Errorf("environment name is required")
-				}
-
-				mwaaEnvName = environments[0]
 			}
 
-			env, err := client.GetEnvironment(ctx, mwaaEnvName)
+			environment, err := client.GetEnvironment(ctx, mwaaEnvName)
 			if err != nil {
 				return err
 			}
 
-			envJSON, err := json.MarshalIndent(env, "", "  ")
-			if err != nil {
-				return err
-			}
-
-			cmd.Println(string(envJSON))
-
-			return nil
+			return printJSON(cmd, environment)
 		},
 	}
 

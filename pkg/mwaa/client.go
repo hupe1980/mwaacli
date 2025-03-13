@@ -46,15 +46,16 @@ func (c *Client) CreateWebLoginToken(ctx context.Context, environmentName string
 }
 
 // InvokeRestAPI sends a REST API request to the MWAA environment with the specified method and payload.
-func (c *Client) InvokeRestAPI(method types.RestApiMethod, name, path string, payload any) (*awsmwaa.InvokeRestApiOutput, error) {
+func (c *Client) InvokeRestAPI(ctx context.Context, method types.RestApiMethod, environmentName, path string, queryParams map[string]any, body any) (*awsmwaa.InvokeRestApiOutput, error) {
 	input := &awsmwaa.InvokeRestApiInput{
-		Method: method,
-		Name:   aws.String(name),
-		Path:   aws.String(path),
-		Body:   document.NewLazyDocument(payload),
+		Method:          method,
+		Name:            aws.String(environmentName),
+		Path:            aws.String(path),
+		QueryParameters: document.NewLazyDocument(queryParams),
+		Body:            document.NewLazyDocument(body),
 	}
 
-	return c.client.InvokeRestApi(context.TODO(), input)
+	return c.client.InvokeRestApi(ctx, input)
 }
 
 // InvokeCliCommand executes a CLI command on the specified MWAA environment.
@@ -67,11 +68,11 @@ func (c *Client) InvokeCliCommand(ctx context.Context, mwaaEnvName, command stri
 	}
 
 	// Construct request details
-	mwaaAuthToken := "Bearer " + *cliTokenOutput.CliToken
-	mwaaWebserverHostname := fmt.Sprintf("https://%s/aws_mwaa/cli", *cliTokenOutput.WebServerHostname)
+	mwaaAuthToken := "Bearer " + aws.ToString(cliTokenOutput.CliToken)
+	mwaaWebserverHostname := fmt.Sprintf("https://%s/aws_mwaa/cli", aws.ToString(cliTokenOutput.WebServerHostname))
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", mwaaWebserverHostname, strings.NewReader(command))
+	req, err := http.NewRequest(http.MethodPost, mwaaWebserverHostname, strings.NewReader(command))
 	if err != nil {
 		return 0, "", "", err
 	}

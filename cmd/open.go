@@ -18,7 +18,6 @@ func newOpenCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open [environment]",
 		Short: "Open the MWAA webapp in a browser",
-		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
@@ -30,20 +29,17 @@ func newOpenCommand(globalOpts *globalOptions) *cobra.Command {
 				return err
 			}
 
-			mwaaEnvName := args[0]
 			ctx := context.Background()
+			var mwaaEnvName string
+			if len(args) > 0 {
+				mwaaEnvName = args[0]
+			}
 
 			if mwaaEnvName == "" {
-				environments, err := client.ListEnvironments(ctx)
+				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {
-					return fmt.Errorf("failed to list environments: %w", err)
+					return err
 				}
-
-				if len(environments) != 1 {
-					return fmt.Errorf("environment name is required")
-				}
-
-				mwaaEnvName = environments[0]
 			}
 
 			webLoginTokenOutput, err := client.CreateWebLoginToken(ctx, mwaaEnvName)

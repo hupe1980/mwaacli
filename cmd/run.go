@@ -38,22 +38,16 @@ for a list of supported commands.`,
 
 			ctx := context.Background()
 
-			// Combine command arguments into a single string
-			command := strings.Join(args, " ")
-
 			// If no environment name is provided, attempt to infer it
 			if mwaaEnvName == "" {
-				environments, err := client.ListEnvironments(ctx)
+				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {
-					return fmt.Errorf("failed to list environments: %w", err)
+					return err
 				}
-
-				if len(environments) != 1 {
-					return fmt.Errorf("multiple environments detected, specify one using --env")
-				}
-
-				mwaaEnvName = environments[0]
 			}
+
+			// Combine command arguments into a single string
+			command := strings.Join(args, " ")
 
 			// Invoke the Airflow CLI command in the specified MWAA environment
 			_, stdout, stderr, err := client.InvokeCliCommand(ctx, mwaaEnvName, command)

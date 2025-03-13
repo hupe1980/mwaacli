@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/hupe1980/mwaacli/pkg/mwaa"
 	"github.com/spf13/cobra"
 )
 
@@ -34,9 +39,35 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.region, "region", "", "AWS region")
 
 	// Add subcommands
+	cmd.AddCommand(newDagCommand(&opts))
 	cmd.AddCommand(newEnvironmentCommand(&opts))
 	cmd.AddCommand(newOpenCommand(&opts))
 	cmd.AddCommand(newRunCommand(&opts))
+	cmd.AddCommand(newSBCommand(&opts))
 
 	return cmd
+}
+
+func getEnvironment(ctx context.Context, client *mwaa.Client) (string, error) {
+	environments, err := client.ListEnvironments(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to list environments: %w", err)
+	}
+
+	if len(environments) != 1 {
+		return "", fmt.Errorf("environment name is required")
+	}
+
+	return environments[0], nil
+}
+
+func printJSON(cmd *cobra.Command, v interface{}) error {
+	json, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	cmd.Println(string(json))
+
+	return nil
 }
