@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 
 	"github.com/hupe1980/mwaacli/pkg/config"
 	"github.com/hupe1980/mwaacli/pkg/mwaa"
@@ -48,9 +47,6 @@ func newListEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.SetOut(os.Stdout)
-	cmd.SetErr(os.Stderr)
-
 	return cmd
 }
 
@@ -91,9 +87,6 @@ func newGetEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
 			return printJSON(cmd, environment)
 		},
 	}
-
-	cmd.SetOut(os.Stdout)
-	cmd.SetErr(os.Stderr)
 
 	return cmd
 }

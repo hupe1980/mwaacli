@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/hupe1980/mwaacli/pkg/config"
 	"github.com/hupe1980/mwaacli/pkg/mwaa"
@@ -89,9 +88,6 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&dagIDPattern, "dag-id-pattern", "", "If set, only return DAGs with dag_ids matching this pattern")
 
 	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
-
-	cmd.SetOut(os.Stdout)
-	cmd.SetErr(os.Stderr)
 
 	return cmd
 }

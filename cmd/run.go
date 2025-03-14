@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/hupe1980/mwaacli/pkg/config"
@@ -73,10 +72,6 @@ for a list of supported commands.`,
 
 	// Add a flag for specifying the MWAA environment name
 	cmd.Flags().StringVarP(&mwaaEnvName, "env", "e", "", "MWAA environment name")
-
-	// Set output streams for the command
-	cmd.SetOut(os.Stdout)
-	cmd.SetErr(os.Stderr)
 
 	return cmd
 }

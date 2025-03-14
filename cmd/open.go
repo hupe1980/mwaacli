@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 
@@ -55,9 +54,6 @@ func newOpenCommand(globalOpts *globalOptions) *cobra.Command {
 			return openBrowser(webserverURL)
 		},
 	}
-
-	cmd.SetOut(os.Stdout)
-	cmd.SetErr(os.Stderr)
 
 	return cmd
 }

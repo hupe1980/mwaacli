@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/hupe1980/mwaacli/pkg/mwaa"
 	"github.com/spf13/cobra"
@@ -34,6 +35,10 @@ func newRootCmd(version string) *cobra.Command {
 		Version: version,
 	}
 
+	// Set output streams for the command
+	cmd.SetOut(os.Stdout)
+	cmd.SetErr(os.Stderr)
+
 	// Define persistent flags for AWS profile and region.
 	cmd.PersistentFlags().StringVar(&opts.profile, "profile", "", "AWS profile")
 	cmd.PersistentFlags().StringVar(&opts.region, "region", "", "AWS region")
@@ -61,7 +66,7 @@ func getEnvironment(ctx context.Context, client *mwaa.Client) (string, error) {
 	return environments[0], nil
 }
 
-func printJSON(cmd *cobra.Command, v interface{}) error {
+func printJSON(cmd *cobra.Command, v any) error {
 	json, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
