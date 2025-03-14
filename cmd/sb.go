@@ -34,39 +34,13 @@ func newListConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
 		Use:   "list-connections",
 		Short: "List connections in the secrets backend",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Load AWS configuration
-			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
-			if err != nil {
-				return fmt.Errorf("failed to load AWS config: %w", err)
-			}
-
-			// Create an MWAA client
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create MWAA client: %w", err)
-			}
-
 			ctx := context.Background()
-
-			// If no environment name is provided, attempt to infer it
-			if mwaaEnvName == "" {
-				mwaaEnvName, err = getEnvironment(ctx, client)
-				if err != nil {
-					return err
-				}
-			}
-
-			env, err := client.GetEnvironment(ctx, mwaaEnvName)
+			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
-				return fmt.Errorf("failed to get environment: %w", err)
+				return err
 			}
 
-			secretsClient, err := secretsbackend.NewClient(cfg, env)
-			if err != nil {
-				return fmt.Errorf("failed to create secrets backend client: %w", err)
-			}
-
-			connections, err := secretsClient.ListConnections(ctx)
+			connections, err := secretsBackendClient.ListConnections(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list connections: %w", err)
 			}
@@ -87,39 +61,13 @@ func newListVariablesCommand(globalOpts *globalOptions) *cobra.Command {
 		Use:   "list-variables",
 		Short: "List variables in the secrets backend",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Load AWS configuration
-			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
-			if err != nil {
-				return fmt.Errorf("failed to load AWS config: %w", err)
-			}
-
-			// Create an MWAA client
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create MWAA client: %w", err)
-			}
-
 			ctx := context.Background()
-
-			// If no environment name is provided, attempt to infer it
-			if mwaaEnvName == "" {
-				mwaaEnvName, err = getEnvironment(ctx, client)
-				if err != nil {
-					return err
-				}
-			}
-
-			env, err := client.GetEnvironment(ctx, mwaaEnvName)
+			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
-				return fmt.Errorf("failed to get environment: %w", err)
+				return err
 			}
 
-			secretsClient, err := secretsbackend.NewClient(cfg, env)
-			if err != nil {
-				return fmt.Errorf("failed to create secrets backend client: %w", err)
-			}
-
-			variables, err := secretsClient.ListVariables(ctx)
+			variables, err := secretsBackendClient.ListVariables(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list variables: %w", err)
 			}
@@ -141,46 +89,21 @@ func newGetConnectionCommand(globalOpts *globalOptions) *cobra.Command {
 		Short: "Get a connection from the secrets backend",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load AWS configuration
-			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
-			if err != nil {
-				return fmt.Errorf("failed to load AWS config: %w", err)
-			}
-
-			// Create an MWAA client
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create MWAA client: %w", err)
-			}
-
 			ctx := context.Background()
-
-			// If no environment name is provided, attempt to infer it
-			if mwaaEnvName == "" {
-				mwaaEnvName, err = getEnvironment(ctx, client)
-				if err != nil {
-					return err
-				}
-			}
-
-			env, err := client.GetEnvironment(ctx, mwaaEnvName)
+			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
-				return fmt.Errorf("failed to get environment: %w", err)
+				return err
 			}
 
-			secretsClient, err := secretsbackend.NewClient(cfg, env)
-			if err != nil {
-				return fmt.Errorf("failed to create secrets backend client: %w", err)
-			}
-
-			connection, err := secretsClient.GetConnection(ctx, args[0])
+			connection, err := secretsBackendClient.GetConnection(ctx, args[0])
 			if err != nil {
 				return fmt.Errorf("failed to get connection: %w", err)
 			}
 
 			var data map[string]any
 			if err := json.Unmarshal([]byte(connection), &data); err != nil {
-				return printJSON(cmd, connection)
+				cmd.Println(connection)
+				return nil
 			}
 
 			return printJSON(cmd, data)
@@ -200,46 +123,21 @@ func newGetVariableCommand(globalOpts *globalOptions) *cobra.Command {
 		Short: "Get a variable from the secrets backend",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load AWS configuration
-			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
-			if err != nil {
-				return fmt.Errorf("failed to load AWS config: %w", err)
-			}
-
-			// Create an MWAA client
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create MWAA client: %w", err)
-			}
-
 			ctx := context.Background()
-
-			// If no environment name is provided, attempt to infer it
-			if mwaaEnvName == "" {
-				mwaaEnvName, err = getEnvironment(ctx, client)
-				if err != nil {
-					return err
-				}
-			}
-
-			env, err := client.GetEnvironment(ctx, mwaaEnvName)
+			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
-				return fmt.Errorf("failed to get environment: %w", err)
+				return err
 			}
 
-			secretsClient, err := secretsbackend.NewClient(cfg, env)
-			if err != nil {
-				return fmt.Errorf("failed to create secrets backend client: %w", err)
-			}
-
-			variable, err := secretsClient.GetVariable(ctx, args[0])
+			variable, err := secretsBackendClient.GetVariable(ctx, args[0])
 			if err != nil {
 				return fmt.Errorf("failed to get variable: %w", err)
 			}
 
 			var data map[string]any
 			if err := json.Unmarshal([]byte(variable), &data); err != nil {
-				return printJSON(cmd, variable)
+				cmd.Println(variable)
+				return nil
 			}
 
 			return printJSON(cmd, data)
@@ -249,4 +147,31 @@ func newGetVariableCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
 
 	return cmd
+}
+
+// initSecretsBackendClient sets up a secrets backend client for the specified environment.
+func initSecretsBackendClient(ctx context.Context, globalOpts *globalOptions, mwaaEnvName *string) (*secretsbackend.Client, error) {
+	cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client, err := mwaa.NewClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MWAA client: %w", err)
+	}
+
+	if *mwaaEnvName == "" {
+		*mwaaEnvName, err = getEnvironment(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	env, err := client.GetEnvironment(ctx, *mwaaEnvName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get environment: %w", err)
+	}
+
+	return secretsbackend.NewClient(cfg, env)
 }

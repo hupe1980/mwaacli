@@ -62,6 +62,10 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 				"offset": offset,
 			}
 
+			if orderBy != "" {
+				queryParams["order_by"] = orderBy
+			}
+
 			if dagIDPattern != "" {
 				queryParams["dag_id_pattern"] = dagIDPattern
 			}

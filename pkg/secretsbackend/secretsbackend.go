@@ -68,29 +68,7 @@ func (c *Client) ListConnections(ctx context.Context) ([]string, error) {
 	prefix := c.kwargs.ConnectionsPrefix
 	pattern := c.kwargs.ConnectionsLookupPattern
 
-	secrets, err := c.secretsBackend.ListSecrets(ctx, prefix)
-	if err != nil {
-		return nil, err
-	}
-
-	if pattern == "" {
-		return secrets, nil
-	}
-
-	var matchedSecrets []string
-
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("invalid regex pattern: %w", err)
-	}
-
-	for _, secret := range secrets {
-		if re.MatchString(secret) {
-			matchedSecrets = append(matchedSecrets, secret)
-		}
-	}
-
-	return matchedSecrets, nil
+	return c.list(ctx, prefix, pattern)
 }
 
 // ListVariables retrieves a list of variable secrets.
@@ -98,6 +76,10 @@ func (c *Client) ListVariables(ctx context.Context) ([]string, error) {
 	prefix := c.kwargs.VariablesPrefix
 	pattern := c.kwargs.VariablesLookupPattern
 
+	return c.list(ctx, prefix, pattern)
+}
+
+func (c *Client) list(ctx context.Context, prefix, pattern string) ([]string, error) {
 	secrets, err := c.secretsBackend.ListSecrets(ctx, prefix)
 	if err != nil {
 		return nil, err
