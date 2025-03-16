@@ -44,11 +44,12 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.region, "region", "", "AWS region")
 
 	// Add subcommands
-	cmd.AddCommand(newDagCommand(&opts))
-	cmd.AddCommand(newEnvironmentCommand(&opts))
+	cmd.AddCommand(newDagsCommand(&opts))
+	cmd.AddCommand(newEnvironmentsCommand(&opts))
 	cmd.AddCommand(newOpenCommand(&opts))
 	cmd.AddCommand(newRunCommand(&opts))
 	cmd.AddCommand(newSBCommand(&opts))
+	cmd.AddCommand(newVariablesCommand(&opts))
 
 	return cmd
 }

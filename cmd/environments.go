@@ -9,9 +9,9 @@ import (
 )
 
 // newEnvironmentCommand creates a new cobra command for managing MWAA environments.
-func newEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
+func newEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "environment",
+		Use:   "environments",
 		Short: "Manage MWAA environments",
 		Long:  "Manage Amazon Managed Workflows for Apache Airflow (MWAA) environments.",
 	}

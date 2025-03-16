@@ -9,15 +9,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newDagCommand(globalOpts *globalOptions) *cobra.Command {
+func newDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dag",
+		Use:   "dags",
 		Short: "Manage DAGs in MWAA",
 		Long:  `Manage Directed Acyclic Graphs (DAGs) in Amazon Managed Workflows for Apache Airflow (MWAA).`,
 	}
 
 	cmd.AddCommand(newListDagsCommand(globalOpts))
 	cmd.AddCommand(newGetDagCommand(globalOpts))
+	cmd.AddCommand(newGetDagSourceCommand(globalOpts))
 
 	return cmd
 }
@@ -88,12 +89,14 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 				queryParams["dag_id_pattern"] = dagIDPattern
 			}
 
-			dags, err := client.ListDags(ctx, mwaaEnvName, queryParams)
-			if err != nil {
-				return fmt.Errorf("failed to list DAGs: %w", err)
+			var response struct {
+				Dags []map[string]any `json:"dags"`
+			}
+			if err := client.RestAPIGet(ctx, mwaaEnvName, "/dags", queryParams, &response); err != nil {
+				return err
 			}
 
-			return printJSON(cmd, dags)
+			return printJSON(cmd, response.Dags)
 		},
 	}
 
@@ -149,16 +152,71 @@ func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
 				queryParams["fields"] = fields
 			}
 
-			dag, err := client.GetDag(ctx, mwaaEnvName, dagID, queryParams)
-			if err != nil {
-				return fmt.Errorf("failed to get DAG: %w", err)
+			var response map[string]any
+			if err := client.RestAPIGet(ctx, mwaaEnvName, fmt.Sprintf("/dags/%s", dagID), queryParams, &response); err != nil {
+				return err
 			}
 
-			return printJSON(cmd, dag)
+			return printJSON(cmd, response)
 		},
 	}
 
 	cmd.Flags().StringSliceVar(&fields, "fields", nil, "List of fields for return")
+
+	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
+
+	return cmd
+}
+
+func newGetDagSourceCommand(globalOpts *globalOptions) *cobra.Command {
+	var (
+		mwaaEnvName string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "source [dag-id]",
+		Short: "Get details of a specific DAG",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+			if err != nil {
+				return err
+			}
+
+			client, err := mwaa.NewClient(cfg)
+			if err != nil {
+				return err
+			}
+
+			ctx := context.Background()
+			if mwaaEnvName == "" {
+				mwaaEnvName, err = getEnvironment(ctx, client)
+				if err != nil {
+					return err
+				}
+			}
+
+			dagID := args[0]
+
+			queryParams := map[string]any{
+				"fields": "file_token",
+			}
+
+			var response map[string]any
+			if err := client.RestAPIGet(ctx, mwaaEnvName, fmt.Sprintf("/dags/%s", dagID), queryParams, &response); err != nil {
+				return err
+			}
+
+			var source string
+			if err := client.RestAPIGet(ctx, mwaaEnvName, fmt.Sprintf("/dagSources/%s", response["file_token"]), nil, &source); err != nil {
+				return err
+			}
+
+			cmd.Println(source)
+
+			return nil
+		},
+	}
 
 	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
 

@@ -18,16 +18,16 @@ func newSBCommand(globalOpts *globalOptions) *cobra.Command {
 		Long:  `Manage secrets backend in Amazon Managed Workflows for Apache Airflow (MWAA).`,
 	}
 
-	cmd.AddCommand(newListConnectionsCommand(globalOpts))
-	cmd.AddCommand(newListVariablesCommand(globalOpts))
+	cmd.AddCommand(newListSBConnectionsCommand(globalOpts))
+	cmd.AddCommand(newListSBVariablesCommand(globalOpts))
 
-	cmd.AddCommand(newGetConnectionCommand(globalOpts))
-	cmd.AddCommand(newGetVariableCommand(globalOpts))
+	cmd.AddCommand(newGetSBConnectionCommand(globalOpts))
+	cmd.AddCommand(newGetSBVariableCommand(globalOpts))
 
 	return cmd
 }
 
-func newListConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
+func newListSBConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
@@ -54,7 +54,7 @@ func newListConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func newListVariablesCommand(globalOpts *globalOptions) *cobra.Command {
+func newListSBVariablesCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
@@ -81,7 +81,7 @@ func newListVariablesCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func newGetConnectionCommand(globalOpts *globalOptions) *cobra.Command {
+func newGetSBConnectionCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
@@ -115,7 +115,7 @@ func newGetConnectionCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func newGetVariableCommand(globalOpts *globalOptions) *cobra.Command {
+func newGetSBVariableCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
