@@ -28,7 +28,8 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 		orderBy      string
 		tags         []string
 		onlyActive   bool
-		paused       string
+		paused       bool
+		unpaused     bool
 		fields       []string
 		dagIDPattern string
 		mwaaEnvName  string
@@ -57,12 +58,29 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 			}
 
 			queryParams := map[string]any{
-				"limit":  limit,
-				"offset": offset,
+				"limit":       limit,
+				"offset":      offset,
+				"only_active": onlyActive,
 			}
 
 			if orderBy != "" {
 				queryParams["order_by"] = orderBy
+			}
+
+			if len(tags) > 0 {
+				queryParams["tags"] = tags
+			}
+
+			if len(fields) > 0 {
+				queryParams["fields"] = fields
+			}
+
+			if paused != unpaused {
+				if paused {
+					queryParams["paused"] = true
+				} else {
+					queryParams["paused"] = false
+				}
 			}
 
 			if dagIDPattern != "" {
@@ -83,7 +101,8 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&orderBy, "order-by", "", "The name of the field to order the results by. Prefix a field name with - to reverse the sort order")
 	cmd.Flags().StringSliceVar(&tags, "tags", nil, "List of tags to filter results")
 	cmd.Flags().BoolVar(&onlyActive, "only-active", true, "Only filter active DAGs")
-	cmd.Flags().StringVar(&paused, "paused", "", "Only filter paused/unpaused DAGs. If absent or null, it returns paused and unpaused DAGs")
+	cmd.Flags().BoolVar(&paused, "paused", false, "Only filter paused DAGs")
+	cmd.Flags().BoolVar(&unpaused, "unpaused", false, "Only filter unpaused DAGs")
 	cmd.Flags().StringSliceVar(&fields, "fields", nil, "List of fields for return")
 	cmd.Flags().StringVar(&dagIDPattern, "dag-id-pattern", "", "If set, only return DAGs with dag_ids matching this pattern")
 
