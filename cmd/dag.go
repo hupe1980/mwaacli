@@ -17,6 +17,7 @@ func newDagCommand(globalOpts *globalOptions) *cobra.Command {
 	}
 
 	cmd.AddCommand(newListDagsCommand(globalOpts))
+	cmd.AddCommand(newGetDagCommand(globalOpts))
 
 	return cmd
 }
@@ -105,6 +106,59 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().BoolVar(&unpaused, "unpaused", false, "Only filter unpaused DAGs")
 	cmd.Flags().StringSliceVar(&fields, "fields", nil, "List of fields for return")
 	cmd.Flags().StringVar(&dagIDPattern, "dag-id-pattern", "", "If set, only return DAGs with dag_ids matching this pattern")
+
+	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
+
+	return cmd
+}
+
+func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
+	var (
+		fields      []string
+		mwaaEnvName string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "get [dag-id]",
+		Short: "Get details of a specific DAG",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+			if err != nil {
+				return err
+			}
+
+			client, err := mwaa.NewClient(cfg)
+			if err != nil {
+				return err
+			}
+
+			ctx := context.Background()
+			if mwaaEnvName == "" {
+				mwaaEnvName, err = getEnvironment(ctx, client)
+				if err != nil {
+					return err
+				}
+			}
+
+			dagID := args[0]
+
+			queryParams := map[string]any{}
+
+			if len(fields) > 0 {
+				queryParams["fields"] = fields
+			}
+
+			dag, err := client.GetDag(ctx, mwaaEnvName, dagID, queryParams)
+			if err != nil {
+				return fmt.Errorf("failed to get DAG: %w", err)
+			}
+
+			return printJSON(cmd, dag)
+		},
+	}
+
+	cmd.Flags().StringSliceVar(&fields, "fields", nil, "List of fields for return")
 
 	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
 
