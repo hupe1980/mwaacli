@@ -21,7 +21,9 @@ func newRunCommand(globalOpts *globalOptions) *cobra.Command {
 		Long: `Executes an Airflow CLI command within an Amazon Managed Workflows for Apache Airflow (MWAA) environment.
 See https://docs.aws.amazon.com/mwaa/latest/userguide/airflow-cli-command-reference.html#airflow-cli-commands-supported 
 for a list of supported commands.`,
-		Args: cobra.MinimumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Load AWS configuration
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)

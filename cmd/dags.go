@@ -38,8 +38,10 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List DAGs in the database",
+		Use:           "list",
+		Short:         "List DAGs in the database",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
@@ -122,9 +124,11 @@ func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "get [dag-id]",
-		Short: "Get details of a specific DAG",
-		Args:  cobra.ExactArgs(1),
+		Use:           "get [dag-id]",
+		Short:         "Get details of a specific DAG",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
@@ -174,9 +178,11 @@ func newGetDagSourceCommand(globalOpts *globalOptions) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "source [dag-id]",
-		Short: "Get details of a specific DAG",
-		Args:  cobra.ExactArgs(1),
+		Use:           "source [dag-id]",
+		Short:         "Get details of a specific DAG",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {

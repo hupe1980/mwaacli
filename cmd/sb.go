@@ -31,8 +31,10 @@ func newListSBConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
-		Use:   "list-connections",
-		Short: "List connections in the secrets backend",
+		Use:           "list-connections",
+		Short:         "List connections in the secrets backend",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
@@ -58,8 +60,10 @@ func newListSBVariablesCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
-		Use:   "list-variables",
-		Short: "List variables in the secrets backend",
+		Use:           "list-variables",
+		Short:         "List variables in the secrets backend",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
@@ -85,9 +89,11 @@ func newGetSBConnectionCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
-		Use:   "get-connection [conn-id]",
-		Short: "Get a connection from the secrets backend",
-		Args:  cobra.ExactArgs(1),
+		Use:           "get-connection [conn-id]",
+		Short:         "Get a connection from the secrets backend",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
@@ -119,9 +125,11 @@ func newGetSBVariableCommand(globalOpts *globalOptions) *cobra.Command {
 	var mwaaEnvName string
 
 	cmd := &cobra.Command{
-		Use:   "get-variable [var-name]",
-		Short: "Get a variable from the secrets backend",
-		Args:  cobra.ExactArgs(1),
+		Use:           "get-variable [var-name]",
+		Short:         "Get a variable from the secrets backend",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)

@@ -17,7 +17,7 @@ test:
 .PHONY: build
 ## build: Builds a beta version of gotoaws
 build:
-	go build -o dist/
+	GOOS=darwin GOARCH=arm64 go build -o dist/
 
 .PHONY: ci
 ## ci: Run all the tests and code checks

@@ -38,7 +38,32 @@ The mwaacli application supports various commands. Use the `--help` flag to see 
 
 ```bash
 ./mwaacli --help
+
+mwaacli is a command-line interface for interacting with Amazon Managed Workflows for Apache Airflow (MWAA).
+
+Usage:
+  mwaacli [command]
+
+Available Commands:
+  completion   Generate the autocompletion script for the specified shell
+  dags         Manage DAGs in MWAA
+  environments Manage MWAA environments
+  help         Help about any command
+  local        Setup and control the AWS MWAA local runner
+  open         Open the MWAA webapp in a browser
+  run          Execute an Airflow CLI command in MWAA
+  sb           Manage secrets backend
+  variables    Manage variables in MWAA
+
+Flags:
+  -h, --help             help for mwaacli
+      --profile string   AWS profile
+      --region string    AWS region
+  -v, --version          version for mwaacli
+
+Use "mwaacli [command] --help" for more information about a command.
 ```
+
 
 ## 🤝 Contributing
 

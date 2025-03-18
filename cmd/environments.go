@@ -25,8 +25,10 @@ func newEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 // newListEnvironmentsCommand creates a cobra command to list MWAA environments.
 func newListEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List MWAA environments",
+		Use:           "list",
+		Short:         "List MWAA environments",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
@@ -53,8 +55,10 @@ func newListEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 // newGetEnvironmentCommand creates a cobra command to get details of an MWAA environment.
 func newGetEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get [environment]",
-		Short: "Get details of an MWAA environment",
+		Use:           "get [environment]",
+		Short:         "Get details of an MWAA environment",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {

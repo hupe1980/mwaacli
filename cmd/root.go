@@ -46,6 +46,7 @@ func newRootCmd(version string) *cobra.Command {
 	// Add subcommands
 	cmd.AddCommand(newDagsCommand(&opts))
 	cmd.AddCommand(newEnvironmentsCommand(&opts))
+	cmd.AddCommand(newLocalCommand(&opts))
 	cmd.AddCommand(newOpenCommand(&opts))
 	cmd.AddCommand(newRunCommand(&opts))
 	cmd.AddCommand(newSBCommand(&opts))
