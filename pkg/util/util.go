@@ -2,9 +2,11 @@ package util
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -72,4 +74,30 @@ func ParseEnvFile(filePath string) ([]string, error) {
 	}
 
 	return envVars, nil
+}
+
+// ShortContainerID shortens a Docker container ID to the first 12 characters.
+func ShortContainerID(containerID string) string {
+	if len(containerID) > 12 {
+		return containerID[:12]
+	}
+
+	return containerID
+}
+
+// IsValidARN checks if the provided string is a valid AWS ARN.
+func IsValidARN(arn string) error {
+	// Regular expression to match the ARN format
+	arnRegex := `^arn:(aws|aws-cn|aws-us-gov):[a-zA-Z0-9-]+:[a-z0-9-]*:[0-9]{12}:[^:]+$`
+
+	matched, err := regexp.MatchString(arnRegex, arn)
+	if err != nil {
+		return err
+	}
+
+	if !matched {
+		return errors.New("invalid ARN format")
+	}
+
+	return nil
 }

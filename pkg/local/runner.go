@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -25,6 +26,7 @@ type RunnerOptions struct {
 	NetworkName    string
 	DagsPath       string
 	ContainerLabel string
+	Credentials    *aws.Credentials
 }
 
 type Runner struct {
@@ -41,6 +43,7 @@ func NewRunner(version string, optFns ...func(o *RunnerOptions)) (*Runner, error
 		NetworkName:    fmt.Sprintf("aws-mwaa-local-runner-%s_default", convertVersion(version)),
 		DagsPath:       ".",
 		ContainerLabel: fmt.Sprintf("aws-mwaa-local-runner-%s", convertVersion(version)),
+		Credentials:    nil,
 	}
 
 	for _, fn := range optFns {
@@ -161,6 +164,20 @@ func (r *Runner) Start(ctx context.Context) error {
 
 	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
 
+	if r.opts.Credentials != nil {
+		if r.opts.Credentials.AccessKeyID != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", r.opts.Credentials.AccessKeyID))
+		}
+
+		if r.opts.Credentials.SecretAccessKey != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", r.opts.Credentials.SecretAccessKey))
+		}
+
+		if r.opts.Credentials.SessionToken != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SESSION_TOKEN=%s", r.opts.Credentials.SessionToken))
+		}
+	}
+
 	// Create MWAA Local Runner container
 	localRunnerConfig := &container.Config{
 		Image:  fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
@@ -195,7 +212,7 @@ func (r *Runner) Start(ctx context.Context) error {
 }
 
 func (r *Runner) Stop(ctx context.Context) error {
-	return r.client.StopContainersByLabel(ctx, "com.docker.compose.project="+r.opts.ContainerLabel)
+	return r.client.StopContainersByLabel(ctx, fmt.Sprintf("github.com.hupe1980.mwaacli=%s", r.opts.ContainerLabel))
 }
 
 func (r *Runner) WaitForAppReady(appURL string) error {

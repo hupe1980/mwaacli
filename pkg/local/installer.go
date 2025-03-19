@@ -103,7 +103,9 @@ func (i *Installer) Run() error {
 
 	// Create an empty directory for "db-data"
 	dbDataPath := filepath.Join(i.cwd, i.opts.ClonePath, "db-data")
-	if err := os.MkdirAll(dbDataPath, os.ModePerm); err != nil {
+	permissions := os.FileMode(0755)
+
+	if err := os.MkdirAll(dbDataPath, permissions); err != nil {
 		return fmt.Errorf("failed to create db-data directory: %w", err)
 	}
 

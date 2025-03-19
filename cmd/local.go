@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/hupe1980/mwaacli/pkg/config"
 	"github.com/hupe1980/mwaacli/pkg/local"
 	"github.com/hupe1980/mwaacli/pkg/util"
 	"github.com/spf13/cobra"
@@ -100,10 +103,12 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func newStartCommand(_ *globalOptions) *cobra.Command {
+func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
-		version string
-		open    bool
+		version  string
+		open     bool
+		awsCreds bool
+		roleARN  string
 	)
 
 	cmd := &cobra.Command{
@@ -114,13 +119,25 @@ func newStartCommand(_ *globalOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Println("Starting the AWS MWAA local runner environment...")
 
-			runner, err := local.NewRunner(version)
+			ctx := context.Background()
+
+			var credentials *aws.Credentials
+			if awsCreds {
+				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
+				if err != nil {
+					return err
+				}
+
+				credentials = creds
+			}
+
+			runner, err := local.NewRunner(version, func(o *local.RunnerOptions) {
+				o.Credentials = credentials
+			})
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
 			defer runner.Close()
-
-			ctx := context.Background()
 
 			if err := runner.BuildImage(ctx); err != nil {
 				return fmt.Errorf("failed to build Docker image: %w", err)
@@ -155,6 +172,8 @@ func newStartCommand(_ *globalOptions) *cobra.Command {
 
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
 	cmd.Flags().BoolVar(&open, "open", false, "Open the Airflow UI in the default web browser after starting")
+	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
+	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 
 	return cmd
 }
@@ -189,4 +208,44 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
 
 	return cmd
+}
+
+// retrieveAWSCredentials retrieves AWS credentials based on the provided profile, region, and optional role ARN.
+func retrieveAWSCredentials(ctx context.Context, profile, region, roleARN string) (*aws.Credentials, error) {
+	// Load AWS configuration
+	cfg, err := config.NewConfig(profile, region)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
+	}
+
+	// If a role ARN is provided, assume the role
+	if roleARN != "" {
+		if err := util.IsValidARN(roleARN); err != nil {
+			return nil, fmt.Errorf("invalid role ARN: %w", err)
+		}
+
+		stsClient := sts.NewFromConfig(cfg.AWSConfig)
+
+		output, err := stsClient.AssumeRole(ctx, &sts.AssumeRoleInput{
+			RoleArn:         aws.String(roleARN),
+			RoleSessionName: aws.String("mwaacli"),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to assume role: %w", err)
+		}
+
+		return &aws.Credentials{
+			AccessKeyID:     aws.ToString(output.Credentials.AccessKeyId),
+			SecretAccessKey: aws.ToString(output.Credentials.SecretAccessKey),
+			SessionToken:    aws.ToString(output.Credentials.SessionToken),
+		}, nil
+	}
+
+	// Otherwise, retrieve default credentials
+	creds, err := cfg.AWSConfig.Credentials.Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve AWS credentials: %w", err)
+	}
+
+	return &creds, nil
 }

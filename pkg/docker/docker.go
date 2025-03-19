@@ -15,6 +15,7 @@ import (
 	dockerClient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/hupe1980/mwaacli/pkg/util"
 	"github.com/moby/term"
 )
 
@@ -112,7 +113,7 @@ func (c *Client) RunContainer(ctx context.Context, containerConfig *container.Co
 		return "", fmt.Errorf("failed to start container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Started container %s with ID %s\n", containerName, containerID)
+	fmt.Printf("Started container %s with ID %s\n", containerName, util.ShortContainerID(containerID))
 
 	return containerID, nil
 }
@@ -126,9 +127,12 @@ func (c *Client) ensureContainer(ctx context.Context, containerConfig *container
 
 	if len(existingContainers) > 0 {
 		containerID := existingContainers[0].ID
-		fmt.Printf("Container %s already exists with ID %s\n", containerName, containerID)
 
-		return containerID, nil
+		if err := c.client.ContainerRemove(ctx, containerID, container.RemoveOptions{
+			Force: true,
+		}); err != nil {
+			return "", fmt.Errorf("failed to remove existing container %s: %w", containerName, err)
+		}
 	}
 
 	if err := c.ensureImage(ctx, containerConfig.Image); err != nil {
@@ -140,7 +144,7 @@ func (c *Client) ensureContainer(ctx context.Context, containerConfig *container
 		return "", fmt.Errorf("failed to create container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Created new container %s with ID %s\n", containerName, resp.ID)
+	fmt.Printf("Created new container %s with ID %s\n", containerName, util.ShortContainerID(resp.ID))
 
 	return resp.ID, nil
 }
@@ -190,22 +194,22 @@ func (c *Client) WaitForContainerReady(ctx context.Context, containerID string, 
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timeout reached while waiting for container %s to be ready", containerID)
+			return fmt.Errorf("timeout reached while waiting for container %s to be ready", util.ShortContainerID(containerID))
 		case <-ticker.C:
 			containerJSON, err := c.client.ContainerInspect(ctx, containerID)
 			if err != nil {
-				return fmt.Errorf("failed to inspect container %s: %w", containerID, err)
+				return fmt.Errorf("failed to inspect container %s: %w", util.ShortContainerID(containerID), err)
 			}
 
 			if containerJSON.State.Running {
-				fmt.Printf("Container %s is now running.\n", containerID)
+				fmt.Printf("Container %s is now running.\n", util.ShortContainerID(containerID))
 				return nil
 			}
 
 			if containerJSON.State.Restarting {
-				fmt.Printf("Container %s is restarting, waiting...\n", containerID)
+				fmt.Printf("Container %s is restarting, waiting...\n", util.ShortContainerID(containerID))
 			} else if containerJSON.State.Dead || containerJSON.State.ExitCode != 0 {
-				return fmt.Errorf("container %s exited unexpectedly with code %d", containerID, containerJSON.State.ExitCode)
+				return fmt.Errorf("container %s exited unexpectedly with code %d", util.ShortContainerID(containerID), containerJSON.State.ExitCode)
 			}
 		}
 	}
