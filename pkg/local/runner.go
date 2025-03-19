@@ -4,176 +4,80 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/storage/memory"
-	"github.com/moby/term"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/go-connections/nat"
+	"github.com/hupe1980/mwaacli/pkg/docker"
+	"github.com/hupe1980/mwaacli/pkg/util"
 )
 
-const RepoURL = "https://github.com/aws/aws-mwaa-local-runner.git"
+type RunnerOptions struct {
+	ClonePath      string
+	NetworkName    string
+	DagsPath       string
+	ContainerLabel string
+}
 
 type Runner struct {
-	RepoURL                  string
-	ClonePath                string
-	AirflowVersion           string
-	DockerComposeProjectName string
+	airflowVersion string
+	client         *docker.Client
+	cwd            string
+	opts           RunnerOptions
 }
 
 // NewRunner creates a new MWAA installer
-func NewRunner(version string) *Runner {
-	return &Runner{
-		RepoURL:                  RepoURL,
-		ClonePath:                "./.aws-mwaa-local-runner",
-		AirflowVersion:           version,
-		DockerComposeProjectName: fmt.Sprintf("aws-mwaa-local-runner-%s", convertVersion(version)),
-	}
-}
-
-func (r *Runner) Init() error {
-	// Check if directory exists and is not empty
-	if err := ensurePathIsEmptyOrNonExistent(r.ClonePath); err != nil {
-		return err
+func NewRunner(version string, optFns ...func(o *RunnerOptions)) (*Runner, error) {
+	opts := RunnerOptions{
+		ClonePath:      DefaultClonePath,
+		NetworkName:    fmt.Sprintf("aws-mwaa-local-runner-%s_default", convertVersion(version)),
+		DagsPath:       ".",
+		ContainerLabel: fmt.Sprintf("aws-mwaa-local-runner-%s", convertVersion(version)),
 	}
 
-	// Clone repository
-	memStore := memory.NewStorage()
-	fs := memfs.New()
+	for _, fn := range optFns {
+		fn(&opts)
+	}
 
-	repo, err := git.Clone(memStore, fs, &git.CloneOptions{
-		URL:           r.RepoURL,
-		ReferenceName: plumbing.ReferenceName(r.AirflowVersion),
-		Progress:      os.Stdout,
-	})
+	client, err := docker.NewClient()
 	if err != nil {
-		return fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	head, err := repo.Head()
-	if err != nil {
-		return fmt.Errorf("failed to get repository head: %w", err)
-	}
-
-	commit, err := repo.CommitObject(head.Hash())
-	if err != nil {
-		return fmt.Errorf("failed to get commit object: %w", err)
-	}
-
-	tree, err := commit.Tree()
-	if err != nil {
-		return fmt.Errorf("failed to get tree from commit: %w", err)
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to get current working directory: %w", err)
+		return nil, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	err = tree.Files().ForEach(func(f *object.File) error {
-		if matched, _ := regexp.MatchString(`^(mwaa-local-env|.github)`, f.Name); matched {
-			// Skip files and directories
-			return nil
-		} else if matched, _ := regexp.MatchString(`^(dags|plugins|requirements|startup_script)`, f.Name); matched {
-			return createFile(cwd, f)
-		}
-
-		return createFile(r.ClonePath, f)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list files: %w", err)
-	}
-
-	return nil
+	return &Runner{
+		airflowVersion: version,
+		client:         client,
+		cwd:            cwd,
+		opts:           opts,
+	}, nil
 }
 
-// ValidatePrereqs checks if Docker and Docker Compose are installed
-func (r *Runner) ValidatePrereqs() error {
-	cli, err := client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
+func (r *Runner) BuildImage(ctx context.Context) error {
+	buildContextDir := filepath.Join(r.opts.ClonePath, "docker")
 
-	// Check Docker version
-	_, err = cli.ServerVersion(context.Background())
-	if err != nil {
-		return fmt.Errorf("docker is not installed or not running: %w", err)
-	}
-
-	// Check Docker Compose (via Docker CLI plugin)
-	var composePath string
-	if runtime.GOOS == "windows" {
-		composePath = filepath.Join(os.Getenv("USERPROFILE"), ".docker", "cli-plugins", "docker-compose.exe")
-	} else {
-		composePath = filepath.Join(os.Getenv("HOME"), ".docker", "cli-plugins", "docker-compose")
-	}
-
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("docker Compose is not installed")
-	}
-
-	return nil
-}
-
-func (r *Runner) BuildImage() error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
-
-	buildContextDir := filepath.Join(r.ClonePath, "docker")
 	buildOptions := types.ImageBuildOptions{
-		Tags:       []string{fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.AirflowVersion))},
+		Tags:       []string{fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion))},
 		Dockerfile: "Dockerfile",
 	}
 
-	buildCtx, err := archive.TarWithOptions(buildContextDir, &archive.TarOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to create build context: %w", err)
-	}
-	defer buildCtx.Close()
-
-	resp, err := cli.ImageBuild(context.Background(), buildCtx, buildOptions)
-	if err != nil {
-		return fmt.Errorf("failed to build Docker image: %w", err)
-	}
-	defer resp.Body.Close()
-
-	termFd, isTerm := term.GetFdInfo(os.Stderr)
-
-	return jsonmessage.DisplayJSONMessagesStream(resp.Body, os.Stderr, termFd, isTerm, nil)
+	return r.client.BuildImage(ctx, buildContextDir, buildOptions)
 }
 
-func (r *Runner) Start() error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
-
-	// Check if the Docker Compose project is already running
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{
-		Filters: filters.NewArgs(filters.Arg("label", "com.docker.compose.project="+r.DockerComposeProjectName)),
-	})
+func (r *Runner) Start(ctx context.Context) error {
+	containers, err := r.client.ListContainersByLabel(ctx, fmt.Sprintf("github.com.hupe1980.mwaacli=%s", r.opts.ContainerLabel), false)
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
@@ -182,86 +86,122 @@ func (r *Runner) Start() error {
 		return fmt.Errorf("airflow local environment is already running")
 	}
 
-	// Define the paths for the Docker Compose files
-	composeFilePath := filepath.Join(r.ClonePath, "docker", "docker-compose-local.yml")
-	if _, err := os.Stat(composeFilePath); os.IsNotExist(err) {
-		return fmt.Errorf("docker-compose-local.yml not found at %s", composeFilePath)
+	dockerComposeLocal, err := docker.ParseDockerCompose(filepath.Join(r.opts.ClonePath, "docker", "docker-compose-local.yml"))
+	if err != nil {
+		return fmt.Errorf("failed to parse docker-compose-local.yml: %w", err)
 	}
 
-	err = r.runDockerCompose(composeFilePath)
+	networkID, err := r.client.CreateNetwork(ctx, r.opts.NetworkName)
 	if err != nil {
-		return fmt.Errorf("failed to start Airflow local environment: %w", err)
+		return fmt.Errorf("failed to create network: %w", err)
+	}
+
+	logConfig := container.LogConfig{
+		Type: "json-file",
+		Config: map[string]string{
+			"max-size": "10m",
+			"max-file": "3",
+		},
+	}
+
+	networkConfig := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			r.opts.NetworkName: {NetworkID: networkID},
+		},
+	}
+
+	containerLabels := map[string]string{
+		"github.com.hupe1980.mwaacli": r.opts.ContainerLabel,
+	}
+
+	postgresImage, err := dockerComposeLocal.GetServiceImage("postgres")
+	if err != nil {
+		return fmt.Errorf("failed to get service image for postgres: %w", err)
+	}
+
+	postgresEnv, err := dockerComposeLocal.GetServiceEnvironment("postgres")
+	if err != nil {
+		return fmt.Errorf("failed to get service environment for postgres: %w", err)
+	}
+
+	// Create Postgres container
+	postgresConfig := &container.Config{
+		Image:  postgresImage,
+		Env:    postgresEnv,
+		Labels: containerLabels,
+	}
+
+	postgresHostConfig := &container.HostConfig{
+		Mounts: []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: filepath.Join(r.cwd, r.opts.ClonePath, "db-data"),
+				Target: "/var/lib/postgresql/data",
+			},
+		},
+		RestartPolicy: container.RestartPolicy{Name: "always"},
+		LogConfig:     logConfig,
+	}
+
+	postgresID, err := r.client.RunContainer(ctx, postgresConfig, postgresHostConfig, networkConfig, "postgres")
+	if err != nil {
+		return fmt.Errorf("failed to create and start Postgres container: %w", err)
+	}
+
+	if err := r.client.WaitForContainerReady(ctx, postgresID, 5*60); err != nil {
+		return fmt.Errorf("failed to wait for Postgres container: %w", err)
+	}
+
+	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
+
+	mwaaEnv, err := util.ParseEnvFile(envFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse env file for Postgres: %w", err)
+	}
+
+	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
+
+	// Create MWAA Local Runner container
+	localRunnerConfig := &container.Config{
+		Image:  fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
+		Env:    mwaaEnv,
+		Cmd:    []string{"local-runner"},
+		Labels: containerLabels,
+		Healthcheck: &container.HealthConfig{
+			Test:     []string{"CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"},
+			Interval: 30 * time.Second,
+			Timeout:  30 * time.Second,
+			Retries:  3,
+		},
+	}
+
+	localRunnerHostConfig := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "always"},
+		PortBindings:  nat.PortMap{"8080/tcp": {nat.PortBinding{HostPort: "8080"}}},
+		Mounts: []mount.Mount{
+			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.DagsPath, "dags"), Target: "/usr/local/airflow/dags"},
+			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.ClonePath, "plugins"), Target: "/usr/local/airflow/plugins"},
+			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.ClonePath, "requirements"), Target: "/usr/local/airflow/requirements"},
+			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.ClonePath, "startup_script"), Target: "/usr/local/airflow/startup"},
+		},
+		LogConfig: logConfig,
+	}
+
+	if _, err := r.client.RunContainer(ctx, localRunnerConfig, localRunnerHostConfig, networkConfig, "local-runner"); err != nil {
+		return fmt.Errorf("failed to create and start MWAA Local Runner container: %w", err)
 	}
 
 	return nil
 }
 
-func (r *Runner) Stop() error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
-
-	// Check if the Docker Compose project is running
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{
-		Filters: filters.NewArgs(filters.Arg("label", "com.docker.compose.project="+r.DockerComposeProjectName)),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
-	}
-
-	if len(containers) == 0 {
-		fmt.Println("No running containers found for the Docker Compose project.")
-		return nil
-	}
-
-	// Stop all containers in the Docker Compose project
-	for _, c := range containers {
-		fmt.Printf("Stopping container: %s\n", c.Names[0])
-
-		if err := cli.ContainerStop(context.Background(), c.ID, container.StopOptions{}); err != nil {
-			return fmt.Errorf("failed to stop container %s: %w", c.Names[0], err)
-		}
-	}
-
-	fmt.Println("All containers in the Docker Compose project have been stopped.")
-
-	return nil
-}
-
-func (r *Runner) runDockerCompose(composeFilePath string) error {
-	// Validate the composeFilePath
-	absPath, err := filepath.Abs(composeFilePath)
-	if err != nil {
-		return fmt.Errorf("invalid compose file path: %w", err)
-	}
-
-	// Validate that the file exists
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		return fmt.Errorf("compose file does not exist: %s", absPath)
-	}
-
-	// Allow only alphanumeric characters and hyphens for the project name to prevent command injection
-	if !isValidProjectName(r.DockerComposeProjectName) {
-		return fmt.Errorf("invalid project name: %s", r.DockerComposeProjectName)
-	}
-
-	// Run the Docker Compose command
-	cmd := exec.Command("docker", "compose", "-p", r.DockerComposeProjectName, "-f", composeFilePath, "up", "-d") //nolint:gosec
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run Docker Compose: %w", err)
-	}
-
-	return nil
+func (r *Runner) Stop(ctx context.Context) error {
+	return r.client.StopContainersByLabel(ctx, "com.docker.compose.project="+r.opts.ContainerLabel)
 }
 
 func (r *Runner) WaitForAppReady(appURL string) error {
 	const (
 		timeout  = 2 * time.Minute // Maximum wait time
-		interval = 5 * time.Second // Polling interval
+		interval = 3 * time.Second // Polling interval
 	)
 
 	// Validate URL to prevent SSRF attacks
@@ -299,6 +239,10 @@ func (r *Runner) WaitForAppReady(appURL string) error {
 	}
 }
 
+func (r *Runner) Close() error {
+	return r.client.Close()
+}
+
 // convertVersion converts a version string like "v2.20.2" to "2_20_2".
 func convertVersion(version string) string {
 	// Remove the leading "v" if it exists
@@ -306,47 +250,4 @@ func convertVersion(version string) string {
 
 	// Replace dots with underscores
 	return strings.ReplaceAll(version, ".", "_")
-}
-
-// isValidProjectName ensures the project name contains only safe characters
-func isValidProjectName(name string) bool {
-	validName := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-	return validName.MatchString(name)
-}
-
-func createFile(path string, f *object.File) error {
-	filePath := filepath.Join(path, f.Name)
-	dirPath := filepath.Dir(filePath)
-
-	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer file.Close()
-
-	reader, err := f.Blob.Reader()
-	if err != nil {
-		return fmt.Errorf("failed to get blob reader: %w", err)
-	}
-	defer reader.Close()
-
-	if _, err := io.Copy(file, reader); err != nil {
-		return fmt.Errorf("failed to copy file: %w", err)
-	}
-
-	return nil
-}
-
-func ensurePathIsEmptyOrNonExistent(path string) error {
-	if entries, err := os.ReadDir(path); err == nil && len(entries) > 0 {
-		return fmt.Errorf("path %s already exists and is not empty", path)
-	} else if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to read directory: %w", err)
-	}
-
-	return nil
 }
