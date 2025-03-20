@@ -28,6 +28,9 @@ func newLocalCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.AddCommand(newBuildImageCommand(globalOpts))
 	cmd.AddCommand(newStartCommand(globalOpts))
 	cmd.AddCommand(newStopCommand(globalOpts))
+	cmd.AddCommand(newTestRequirementsCommand(globalOpts))
+	cmd.AddCommand(newPackageRequirementsCommand(globalOpts))
+	cmd.AddCommand(newTestStartupScriptCommand(globalOpts))
 
 	return cmd
 }
@@ -206,6 +209,115 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
+
+	return cmd
+}
+
+func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
+	var version string
+
+	cmd := &cobra.Command{
+		Use:           "test-requirements",
+		Short:         "Test installing requirements in an ephemeral container instance",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Println("Testing requirements installation in an ephemeral container...")
+
+			ctx := context.Background()
+			runner, err := local.NewRunner(version)
+			if err != nil {
+				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
+			}
+			defer runner.Close()
+
+			// Ensure image is built
+			if err := runner.BuildImage(ctx); err != nil {
+				return fmt.Errorf("failed to build Docker image: %w", err)
+			}
+
+			if err := runner.TestRequirements(ctx); err != nil {
+				return fmt.Errorf("failed to test requirements installation: %w", err)
+			}
+
+			cmd.Println("Requirements installed successfully in the test container.")
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing requirements")
+
+	return cmd
+}
+
+func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
+	var version string
+
+	cmd := &cobra.Command{
+		Use:           "package-requirements",
+		Short:         "Package Python requirements into a ZIP file for AWS MWAA",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Println("Packaging Python requirements into a ZIP file...")
+
+			ctx := context.Background()
+			runner, err := local.NewRunner(version)
+			if err != nil {
+				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
+			}
+			defer runner.Close()
+
+			if err := runner.PackageRequirements(ctx); err != nil {
+				return fmt.Errorf("failed to package requirements: %w", err)
+			}
+
+			cmd.Println("Python requirements packaged successfully.")
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for packaging requirements")
+
+	return cmd
+}
+
+func newTestStartupScriptCommand(_ *globalOptions) *cobra.Command {
+	var version string
+
+	cmd := &cobra.Command{
+		Use:           "test-startup-script",
+		Short:         "Test executing the startup script in an ephemeral container",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Println("Testing startup script execution in an ephemeral container...")
+
+			ctx := context.Background()
+			runner, err := local.NewRunner(version)
+			if err != nil {
+				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
+			}
+			defer runner.Close()
+
+			// Ensure image is built
+			if err := runner.BuildImage(ctx); err != nil {
+				return fmt.Errorf("failed to build Docker image: %w", err)
+			}
+
+			if err := runner.TestStartupScript(ctx); err != nil {
+				return fmt.Errorf("failed to execute startup script: %w", err)
+			}
+
+			cmd.Println("Startup script executed successfully in the test container.")
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
 
 	return cmd
 }
