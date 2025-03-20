@@ -12,6 +12,7 @@ It provides an easy way to manage MWAA environments, execute Airflow CLI command
 - **Get details of a specific MWAA environment**: Retrieve detailed information about a specific MWAA environment.
 - **Execute Airflow CLI commands in MWAA**: Run Airflow CLI commands directly within MWAA.
 - **Call Airflow Rest API**: Interact with the Airflow Rest API seamlessly.
+- **AWS MWAA Local Runner Support**: Set up and control a local MWAA environment for testing and development.
 - **Open the MWAA web UI in a browser**: Quickly open the MWAA web UI in your default browser.
 - **Manage Airflow SecurityBackends**: Handle Airflow SecurityBackends efficiently.
 
