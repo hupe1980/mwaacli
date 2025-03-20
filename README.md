@@ -37,7 +37,7 @@ Download the pre-compiled binaries from the [releases page](https://github.com/h
 
 The mwaacli application supports various commands. Use the `--help` flag to see available commands and their descriptions:
 
-```bash
+```txt
 ./mwaacli --help
 
 mwaacli is a command-line interface for interacting with Amazon Managed Workflows for Apache Airflow (MWAA).
