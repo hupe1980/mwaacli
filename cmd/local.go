@@ -14,7 +14,6 @@ import (
 
 const (
 	defaultVersion = "v2.10.3"
-	webserverURL   = "http://localhost:8080"
 )
 
 func newLocalCommand(globalOpts *globalOptions) *cobra.Command {
@@ -110,6 +109,8 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
 		version  string
 		open     bool
+		port     string
+		resetDB  bool
 		awsCreds bool
 		roleARN  string
 	)
@@ -124,19 +125,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 			ctx := context.Background()
 
-			var credentials *aws.Credentials
-			if awsCreds {
-				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
-				if err != nil {
-					return err
-				}
-
-				credentials = creds
-			}
-
-			runner, err := local.NewRunner(version, func(o *local.RunnerOptions) {
-				o.Credentials = credentials
-			})
+			runner, err := local.NewRunner(version)
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -148,13 +137,29 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 			cmd.Println("Docker image built successfully.")
 
-			if err := runner.Start(ctx); err != nil {
+			var credentials *aws.Credentials
+			if awsCreds {
+				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
+				if err != nil {
+					return err
+				}
+
+				credentials = creds
+			}
+
+			if err := runner.Start(ctx, func(o *local.StartOptions) {
+				o.Port = port
+				o.ResetDB = resetDB
+				o.Credentials = credentials
+			}); err != nil {
 				return fmt.Errorf("failed to start AWS MWAA local runner environment: %w", err)
 			}
 
+			webserverURL := fmt.Sprintf("http://localhost:%s", port)
+
 			// Wait for the application to be ready
 			cmd.Println("Waiting for the Airflow webserver to be ready...")
-			if err := runner.WaitForAppReady(fmt.Sprintf("%s/health", webserverURL)); err != nil {
+			if err := runner.WaitForAppReady(ctx, fmt.Sprintf("%s/health", webserverURL)); err != nil {
 				return fmt.Errorf("application is not ready: %w", err)
 			}
 
@@ -175,6 +180,8 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
 	cmd.Flags().BoolVar(&open, "open", false, "Open the Airflow UI in the default web browser after starting")
+	cmd.Flags().BoolVar(&resetDB, "reset-db", false, "Reset the Airflow database before starting")
+	cmd.Flags().StringVar(&port, "port", "8080", "Specify the port for the Airflow webserver")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 

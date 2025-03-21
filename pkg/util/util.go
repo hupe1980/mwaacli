@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -43,6 +45,7 @@ func EnsurePathIsEmptyOrNonExistent(path string) error {
 	return nil
 }
 
+// ParseEnvFile opens a .env file and parses its content using ParseEnv.
 func ParseEnvFile(filePath string) ([]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -50,9 +53,14 @@ func ParseEnvFile(filePath string) ([]string, error) {
 	}
 	defer file.Close()
 
+	return ParseEnv(file)
+}
+
+// ParseEnv parses .env content from an io.Reader and returns a slice of key=value pairs.
+func ParseEnv(reader io.Reader) ([]string, error) {
 	var envVars []string
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
@@ -63,14 +71,39 @@ func ParseEnvFile(filePath string) ([]string, error) {
 
 		// Ensure the line is in the format KEY=VALUE
 		if !strings.Contains(line, "=") {
-			return nil, fmt.Errorf("invalid line in env file: %s", line)
+			return nil, fmt.Errorf("invalid line in env content: %s", line)
 		}
 
-		envVars = append(envVars, line)
+		// Split the line into key and value
+		parts := strings.SplitN(line, "=", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Handle inline comments for unquoted values
+		if !strings.HasPrefix(value, `"`) && !strings.HasPrefix(value, `'`) {
+			if idx := strings.Index(value, " #"); idx != -1 {
+				value = value[:idx]
+			}
+		}
+
+		// Handle quoted values
+		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+			// Remove double quotes and handle escaped characters
+			value = strings.Trim(value, `"`)
+			value = strings.ReplaceAll(value, `\"`, `"`)
+			value = strings.ReplaceAll(value, `\n`, "\n")
+			value = strings.ReplaceAll(value, `\r`, "\r")
+		} else if strings.HasPrefix(value, `'`) && strings.HasSuffix(value, `'`) {
+			// Remove single quotes (no escaping)
+			value = strings.Trim(value, `'`)
+		}
+
+		// Reconstruct the key=value pair and add to the list
+		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read env file: %w", err)
+		return nil, fmt.Errorf("failed to read env content: %w", err)
 	}
 
 	return envVars, nil
@@ -100,4 +133,18 @@ func IsValidARN(arn string) error {
 	}
 
 	return nil
+}
+
+// IsPortFree checks if a given port is free on the machine.
+func IsPortFree(port string) bool {
+	// Try to listen on the port
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	if err != nil {
+		// Port is in use
+		return false
+	}
+	// Close the listener to free the port
+	defer listener.Close()
+
+	return true
 }

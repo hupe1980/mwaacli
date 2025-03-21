@@ -26,7 +26,6 @@ type RunnerOptions struct {
 	NetworkName    string
 	DagsPath       string
 	ContainerLabel string
-	Credentials    *aws.Credentials
 }
 
 type Runner struct {
@@ -43,7 +42,6 @@ func NewRunner(version string, optFns ...func(o *RunnerOptions)) (*Runner, error
 		NetworkName:    fmt.Sprintf("aws-mwaa-local-runner-%s_default", convertVersion(version)),
 		DagsPath:       ".",
 		ContainerLabel: fmt.Sprintf("aws-mwaa-local-runner-%s", convertVersion(version)),
-		Credentials:    nil,
 	}
 
 	for _, fn := range optFns {
@@ -79,8 +77,27 @@ func (r *Runner) BuildImage(ctx context.Context) error {
 	return r.client.BuildImage(ctx, buildContextDir, buildOptions)
 }
 
-func (r *Runner) Start(ctx context.Context) error {
-	containers, err := r.client.ListContainersByLabel(ctx, fmt.Sprintf("github.com.hupe1980.mwaacli=%s", r.opts.ContainerLabel), false)
+type StartOptions struct {
+	Port        string
+	Credentials *aws.Credentials
+	ResetDB     bool
+}
+
+func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) error {
+	opts := StartOptions{
+		Port:        "8080",
+		Credentials: nil,
+	}
+
+	for _, fn := range optFns {
+		fn(&opts)
+	}
+
+	if !util.IsPortFree(opts.Port) {
+		return fmt.Errorf("port %s is already in use", opts.Port)
+	}
+
+	containers, err := r.client.ListContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel), false)
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
@@ -114,7 +131,18 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 
 	containerLabels := map[string]string{
-		"github.com.hupe1980.mwaacli": r.opts.ContainerLabel,
+		LabelKey: r.opts.ContainerLabel,
+	}
+
+	if opts.ResetDB {
+		dbDataPath := filepath.Join(r.cwd, r.opts.ClonePath, "db-data")
+		if err := os.RemoveAll(dbDataPath); err != nil {
+			return fmt.Errorf("failed to clear database files: %w", err)
+		}
+
+		if err := os.MkdirAll(dbDataPath, os.ModePerm); err != nil {
+			return fmt.Errorf("failed to recreate database directory: %w", err)
+		}
 	}
 
 	postgresImage, err := dockerComposeLocal.GetServiceImage("postgres")
@@ -135,6 +163,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 
 	postgresHostConfig := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "always"},
 		Mounts: []mount.Mount{
 			{
 				Type:   mount.TypeBind,
@@ -142,8 +171,7 @@ func (r *Runner) Start(ctx context.Context) error {
 				Target: "/var/lib/postgresql/data",
 			},
 		},
-		RestartPolicy: container.RestartPolicy{Name: "always"},
-		LogConfig:     logConfig,
+		LogConfig: logConfig,
 	}
 
 	postgresID, err := r.client.RunContainer(ctx, postgresConfig, postgresHostConfig, networkConfig, "postgres")
@@ -155,27 +183,9 @@ func (r *Runner) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to wait for Postgres container: %w", err)
 	}
 
-	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
-
-	mwaaEnv, err := util.ParseEnvFile(envFilePath)
+	mwaaEnv, err := r.buildEnvironmentVariables(opts.Credentials)
 	if err != nil {
-		return fmt.Errorf("failed to parse env file for Postgres: %w", err)
-	}
-
-	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
-
-	if r.opts.Credentials != nil {
-		if r.opts.Credentials.AccessKeyID != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", r.opts.Credentials.AccessKeyID))
-		}
-
-		if r.opts.Credentials.SecretAccessKey != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", r.opts.Credentials.SecretAccessKey))
-		}
-
-		if r.opts.Credentials.SessionToken != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SESSION_TOKEN=%s", r.opts.Credentials.SessionToken))
-		}
+		return fmt.Errorf("failed to build environment variables: %w", err)
 	}
 
 	// Create MWAA Local Runner container
@@ -194,7 +204,7 @@ func (r *Runner) Start(ctx context.Context) error {
 
 	localRunnerHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "always"},
-		PortBindings:  nat.PortMap{"8080/tcp": {nat.PortBinding{HostPort: "8080"}}},
+		PortBindings:  nat.PortMap{"8080/tcp": {nat.PortBinding{HostPort: opts.Port}}},
 		Mounts: []mount.Mount{
 			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.DagsPath, "dags"), Target: "/usr/local/airflow/dags"},
 			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.ClonePath, "plugins"), Target: "/usr/local/airflow/plugins"},
@@ -212,10 +222,10 @@ func (r *Runner) Start(ctx context.Context) error {
 }
 
 func (r *Runner) Stop(ctx context.Context) error {
-	return r.client.StopContainersByLabel(ctx, fmt.Sprintf("github.com.hupe1980.mwaacli=%s", r.opts.ContainerLabel))
+	return r.client.StopContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel))
 }
 
-func (r *Runner) WaitForAppReady(appURL string) error {
+func (r *Runner) WaitForAppReady(ctx context.Context, appURL string) error {
 	const (
 		timeout  = 2 * time.Minute // Maximum wait time
 		interval = 3 * time.Second // Polling interval
@@ -231,33 +241,74 @@ func (r *Runner) WaitForAppReady(appURL string) error {
 		return errors.New("unsupported URL scheme, must be http or https")
 	}
 
-	// Create an HTTP client with timeouts
+	// Create an HTTP client with a timeout for individual requests
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Prevent hanging requests
 	}
 
-	start := time.Now()
+	// Create a context with timeout for the entire operation
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	for {
-		if time.Since(start) > timeout {
-			return errors.New("timeout waiting for application to be ready")
-		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for application to be ready: %w", ctx.Err())
+		case <-ticker.C:
+			// Create a new HTTP request with the context
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
+			if err != nil {
+				return fmt.Errorf("failed to create HTTP request: %w", err)
+			}
 
-		resp, err := client.Get(parsedURL.String())
-		if err == nil {
-			defer resp.Body.Close() // Ensure response body is always closed
+			// Perform the HTTP request
+			resp, err := client.Do(req)
+			if err == nil {
+				defer resp.Body.Close() // Ensure response body is always closed
 
-			if resp.StatusCode == http.StatusOK {
-				return nil // Application is ready
+				if resp.StatusCode == http.StatusOK {
+					return nil // Application is ready
+				}
 			}
 		}
-
-		time.Sleep(interval) // Wait before retrying
 	}
 }
 
 func (r *Runner) Close() error {
 	return r.client.Close()
+}
+
+func (r *Runner) buildEnvironmentVariables(credentials *aws.Credentials) ([]string, error) {
+	// Parse the .env file
+	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
+
+	mwaaEnv, err := util.ParseEnvFile(envFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse env file: %w", err)
+	}
+
+	// Append default environment variables
+	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
+
+	// Add AWS credentials if provided
+	if credentials != nil {
+		if credentials.AccessKeyID != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credentials.AccessKeyID))
+		}
+
+		if credentials.SecretAccessKey != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credentials.SecretAccessKey))
+		}
+
+		if credentials.SessionToken != "" {
+			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SESSION_TOKEN=%s", credentials.SessionToken))
+		}
+	}
+
+	return mwaaEnv, nil
 }
 
 // convertVersion converts a version string like "v2.20.2" to "2_20_2".
