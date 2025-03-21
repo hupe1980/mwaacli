@@ -138,7 +138,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 			cmd.Println("Docker image built successfully.")
 
-			var credentials *aws.Credentials
+			var credentials *local.AWSCredentials
 			if awsCreds {
 				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
 				if err != nil {
@@ -236,6 +236,7 @@ func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
 			cmd.Println("Testing requirements installation in an ephemeral container...")
 
 			ctx := context.Background()
+
 			runner, err := local.NewRunner(version)
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
@@ -274,11 +275,17 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 			cmd.Println("Packaging Python requirements into a ZIP file...")
 
 			ctx := context.Background()
+
 			runner, err := local.NewRunner(version)
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
 			defer runner.Close()
+
+			// Ensure image is built
+			if err := runner.BuildImage(ctx); err != nil {
+				return fmt.Errorf("failed to build Docker image: %w", err)
+			}
 
 			if err := runner.PackageRequirements(ctx); err != nil {
 				return fmt.Errorf("failed to package requirements: %w", err)
@@ -295,8 +302,12 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func newTestStartupScriptCommand(_ *globalOptions) *cobra.Command {
-	var version string
+func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
+	var (
+		version  string
+		awsCreds bool
+		roleARN  string
+	)
 
 	cmd := &cobra.Command{
 		Use:           "test-startup-script",
@@ -318,7 +329,21 @@ func newTestStartupScriptCommand(_ *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to build Docker image: %w", err)
 			}
 
-			if err := runner.TestStartupScript(ctx); err != nil {
+			var credentials *local.AWSCredentials
+			if awsCreds {
+				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
+				if err != nil {
+					return err
+				}
+
+				credentials = creds
+			}
+
+			if err := runner.TestStartupScript(ctx, func(o *local.TestStartupScriptOptions) {
+				o.Envs = &local.Envs{
+					Credentials: credentials,
+				}
+			}); err != nil {
 				return fmt.Errorf("failed to execute startup script: %w", err)
 			}
 
@@ -329,12 +354,14 @@ func newTestStartupScriptCommand(_ *globalOptions) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
+	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
+	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 
 	return cmd
 }
 
 // retrieveAWSCredentials retrieves AWS credentials based on the provided profile, region, and optional role ARN.
-func retrieveAWSCredentials(ctx context.Context, profile, region, roleARN string) (*aws.Credentials, error) {
+func retrieveAWSCredentials(ctx context.Context, profile, region, roleARN string) (*local.AWSCredentials, error) {
 	// Load AWS configuration
 	cfg, err := config.NewConfig(profile, region)
 	if err != nil {
@@ -357,10 +384,13 @@ func retrieveAWSCredentials(ctx context.Context, profile, region, roleARN string
 			return nil, fmt.Errorf("failed to assume role: %w", err)
 		}
 
-		return &aws.Credentials{
-			AccessKeyID:     aws.ToString(output.Credentials.AccessKeyId),
-			SecretAccessKey: aws.ToString(output.Credentials.SecretAccessKey),
-			SessionToken:    aws.ToString(output.Credentials.SessionToken),
+		return &local.AWSCredentials{
+			Credentials: aws.Credentials{
+				AccessKeyID:     aws.ToString(output.Credentials.AccessKeyId),
+				SecretAccessKey: aws.ToString(output.Credentials.SecretAccessKey),
+				SessionToken:    aws.ToString(output.Credentials.SessionToken),
+			},
+			Region: cfg.Region,
 		}, nil
 	}
 
@@ -370,5 +400,8 @@ func retrieveAWSCredentials(ctx context.Context, profile, region, roleARN string
 		return nil, fmt.Errorf("failed to retrieve AWS credentials: %w", err)
 	}
 
-	return &creds, nil
+	return &local.AWSCredentials{
+		Credentials: creds,
+		Region:      cfg.Region,
+	}, nil
 }

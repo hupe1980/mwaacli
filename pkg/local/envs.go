@@ -8,8 +8,13 @@ import (
 	"github.com/hupe1980/mwaacli/pkg/util"
 )
 
+type AWSCredentials struct {
+	aws.Credentials
+	Region string
+}
+
 type Envs struct {
-	Credentials        *aws.Credentials
+	Credentials        *AWSCredentials
 	S3DagsPath         string
 	S3RequirementsPath string
 	S3PluginsPath      string
@@ -30,6 +35,10 @@ func (e *Envs) ToSlice() []string {
 
 		if e.Credentials.SessionToken != "" {
 			envVars = append(envVars, fmt.Sprintf("AWS_SESSION_TOKEN=%s", e.Credentials.SessionToken))
+		}
+
+		if e.Credentials.Region != "" {
+			envVars = append(envVars, fmt.Sprintf("AWS_REGION=%s", e.Credentials.Region), fmt.Sprintf("AWS_DEFAULT_REGION=%s", e.Credentials.Region))
 		}
 	}
 
