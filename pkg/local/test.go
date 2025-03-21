@@ -29,9 +29,24 @@ func (r *Runner) TestRequirements(ctx context.Context) error {
 	return err
 }
 
-func (r *Runner) TestStartupScript(ctx context.Context) error {
+type TestStartupScriptOptions struct {
+	Envs *Envs
+}
+
+func (r *Runner) TestStartupScript(ctx context.Context, optFns ...func(o *TestStartupScriptOptions)) error {
+	opts := TestStartupScriptOptions{
+		Envs: nil,
+	}
+
+	for _, fn := range optFns {
+		fn(&opts)
+	}
+
+	mwaaEnv := opts.Envs.ToSlice()
+
 	startupConfig := &container.Config{
 		Image: fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
+		Env:   mwaaEnv,
 		Cmd:   []string{"test-startup-script"},
 	}
 
