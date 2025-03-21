@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/briandowns/spinner"
 	"github.com/hupe1980/mwaacli/pkg/config"
 	"github.com/hupe1980/mwaacli/pkg/local"
 	"github.com/hupe1980/mwaacli/pkg/util"
@@ -161,12 +163,10 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 			webserverURL := fmt.Sprintf("http://localhost:%s", port)
 
 			// Wait for the webserver to be ready
-			cmd.Println("Waiting for the Airflow webserver to be ready...")
-			if err := runner.WaitForWebserverReady(ctx, fmt.Sprintf("%s/health", webserverURL)); err != nil {
+			//cmd.Println("Waiting for the Airflow webserver to be ready...")
+			if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
 				return fmt.Errorf("application is not ready: %w", err)
 			}
-
-			cmd.Println("AWS MWAA local runner environment started successfully.")
 
 			if open {
 				cmd.Println("Opening the Airflow UI in the default web browser...")
@@ -358,6 +358,24 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 
 	return cmd
+}
+
+func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL string) error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Prefix = "Waiting for the Airflow webserver to be ready... "
+	s.Start()
+
+	defer s.Stop()
+
+	// Wait for the webserver to be ready
+	err := runner.WaitForWebserverReady(ctx, fmt.Sprintf("%s/health", webserverURL))
+	if err != nil {
+		return fmt.Errorf("application is not ready: %w", err)
+	}
+
+	s.FinalMSG = "AWS MWAA local runner environment started successfully!\n"
+
+	return nil
 }
 
 // retrieveAWSCredentials retrieves AWS credentials based on the provided profile, region, and optional role ARN.
