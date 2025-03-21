@@ -107,10 +107,11 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 
 func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
-		version  string
-		open     bool
-		port     string
-		resetDB  bool
+		version string
+		open    bool
+		port    string
+		resetDB bool
+		//syncConfig bool
 		awsCreds bool
 		roleARN  string
 	)
@@ -150,16 +151,18 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 			if err := runner.Start(ctx, func(o *local.StartOptions) {
 				o.Port = port
 				o.ResetDB = resetDB
-				o.Credentials = credentials
+				o.Envs = &local.Envs{
+					Credentials: credentials,
+				}
 			}); err != nil {
 				return fmt.Errorf("failed to start AWS MWAA local runner environment: %w", err)
 			}
 
 			webserverURL := fmt.Sprintf("http://localhost:%s", port)
 
-			// Wait for the application to be ready
+			// Wait for the webserver to be ready
 			cmd.Println("Waiting for the Airflow webserver to be ready...")
-			if err := runner.WaitForAppReady(ctx, fmt.Sprintf("%s/health", webserverURL)); err != nil {
+			if err := runner.WaitForWebserverReady(ctx, fmt.Sprintf("%s/health", webserverURL)); err != nil {
 				return fmt.Errorf("application is not ready: %w", err)
 			}
 
@@ -181,6 +184,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
 	cmd.Flags().BoolVar(&open, "open", false, "Open the Airflow UI in the default web browser after starting")
 	cmd.Flags().BoolVar(&resetDB, "reset-db", false, "Reset the Airflow database before starting")
+	//cmd.Flags().BoolVar(&syncConfig, "sync-config", false, "Sync the Airflow configuration before starting")
 	cmd.Flags().StringVar(&port, "port", "8080", "Specify the port for the Airflow webserver")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")

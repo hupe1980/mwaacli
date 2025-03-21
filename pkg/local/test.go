@@ -16,6 +16,7 @@ func (r *Runner) TestRequirements(ctx context.Context) error {
 	}
 
 	hostConfig := &container.HostConfig{
+		AutoRemove: true,
 		Mounts: []mount.Mount{
 			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.DagsPath, "dags"), Target: "/usr/local/airflow/dags"},
 			{Type: mount.TypeBind, Source: filepath.Join(r.cwd, r.opts.ClonePath, "plugins"), Target: "/usr/local/airflow/plugins"},

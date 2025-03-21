@@ -109,6 +109,34 @@ func ParseEnv(reader io.Reader) ([]string, error) {
 	return envVars, nil
 }
 
+// MergeEnvVars merges environment variables, resolving duplicate keys by keeping the last occurrence.
+func MergeEnvVars(envVars []string, ignoreEmptyValues bool) []string {
+	envMap := make(map[string]string)
+
+	// Iterate over the slice and populate the map
+	for _, envVar := range envVars {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			value := parts[1]
+
+			if ignoreEmptyValues && value == "" {
+				continue
+			}
+
+			envMap[key] = value // Overwrite the value if the key already exists
+		}
+	}
+
+	// Convert the map back to a slice
+	mergedEnvVars := make([]string, 0, len(envMap))
+	for key, value := range envMap {
+		mergedEnvVars = append(mergedEnvVars, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	return mergedEnvVars
+}
+
 // ShortContainerID shortens a Docker container ID to the first 12 characters.
 func ShortContainerID(containerID string) string {
 	if len(containerID) > 12 {

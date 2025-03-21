@@ -112,3 +112,75 @@ func TestParseEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeEnvVars(t *testing.T) {
+	tests := []struct {
+		name              string
+		input             []string
+		ignoreEmptyValues bool
+		expected          []string
+	}{
+		{
+			name: "No duplicates, ignoreEmptyValues=false",
+			input: []string{
+				"KEY1=value1",
+				"KEY2=value2",
+			},
+			ignoreEmptyValues: false,
+			expected: []string{
+				"KEY1=value1",
+				"KEY2=value2",
+			},
+		},
+		{
+			name: "With duplicates, last occurrence wins, ignoreEmptyValues=false",
+			input: []string{
+				"KEY1=value1",
+				"KEY2=value2",
+				"KEY1=new_value1", // Duplicate key
+			},
+			ignoreEmptyValues: false,
+			expected: []string{
+				"KEY1=new_value1", // Last occurrence is kept
+				"KEY2=value2",
+			},
+		},
+		{
+			name: "Empty values ignored, ignoreEmptyValues=true",
+			input: []string{
+				"KEY1=value1",
+				"KEY2=",
+				"KEY3=value3",
+				"KEY2=new_value2", // Duplicate key
+			},
+			ignoreEmptyValues: true,
+			expected: []string{
+				"KEY1=value1",
+				"KEY3=value3",
+				"KEY2=new_value2", // Last occurrence is kept
+			},
+		},
+		{
+			name: "Empty values not ignored, ignoreEmptyValues=false",
+			input: []string{
+				"KEY1=value1",
+				"KEY2=",
+				"KEY3=value3",
+				"KEY2=new_value2", // Duplicate key
+			},
+			ignoreEmptyValues: false,
+			expected: []string{
+				"KEY1=value1",
+				"KEY2=new_value2", // Last occurrence is kept
+				"KEY3=value3",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := MergeEnvVars(tt.input, tt.ignoreEmptyValues)
+			assert.ElementsMatch(t, tt.expected, result) // Order doesn't matter
+		})
+	}
+}

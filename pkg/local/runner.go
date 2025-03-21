@@ -8,10 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -78,15 +76,15 @@ func (r *Runner) BuildImage(ctx context.Context) error {
 }
 
 type StartOptions struct {
-	Port        string
-	Credentials *aws.Credentials
-	ResetDB     bool
+	Port    string
+	ResetDB bool
+	Envs    *Envs
 }
 
 func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) error {
 	opts := StartOptions{
-		Port:        "8080",
-		Credentials: nil,
+		Port: "8080",
+		Envs: nil,
 	}
 
 	for _, fn := range optFns {
@@ -183,7 +181,7 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 		return fmt.Errorf("failed to wait for Postgres container: %w", err)
 	}
 
-	mwaaEnv, err := r.buildEnvironmentVariables(opts.Credentials)
+	mwaaEnv, err := r.buildEnvironmentVariables(opts.Envs)
 	if err != nil {
 		return fmt.Errorf("failed to build environment variables: %w", err)
 	}
@@ -225,14 +223,13 @@ func (r *Runner) Stop(ctx context.Context) error {
 	return r.client.StopContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel))
 }
 
-func (r *Runner) WaitForAppReady(ctx context.Context, appURL string) error {
+func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string) error {
 	const (
 		timeout  = 2 * time.Minute // Maximum wait time
 		interval = 3 * time.Second // Polling interval
 	)
 
-	// Validate URL to prevent SSRF attacks
-	parsedURL, err := url.ParseRequestURI(appURL)
+	parsedURL, err := url.ParseRequestURI(webserverURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
@@ -279,43 +276,4 @@ func (r *Runner) WaitForAppReady(ctx context.Context, appURL string) error {
 
 func (r *Runner) Close() error {
 	return r.client.Close()
-}
-
-func (r *Runner) buildEnvironmentVariables(credentials *aws.Credentials) ([]string, error) {
-	// Parse the .env file
-	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
-
-	mwaaEnv, err := util.ParseEnvFile(envFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse env file: %w", err)
-	}
-
-	// Append default environment variables
-	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
-
-	// Add AWS credentials if provided
-	if credentials != nil {
-		if credentials.AccessKeyID != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credentials.AccessKeyID))
-		}
-
-		if credentials.SecretAccessKey != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credentials.SecretAccessKey))
-		}
-
-		if credentials.SessionToken != "" {
-			mwaaEnv = append(mwaaEnv, fmt.Sprintf("AWS_SESSION_TOKEN=%s", credentials.SessionToken))
-		}
-	}
-
-	return mwaaEnv, nil
-}
-
-// convertVersion converts a version string like "v2.20.2" to "2_20_2".
-func convertVersion(version string) string {
-	// Remove the leading "v" if it exists
-	version = strings.TrimPrefix(version, "v")
-
-	// Replace dots with underscores
-	return strings.ReplaceAll(version, ".", "_")
 }
