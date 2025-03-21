@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hupe1980/mwaacli/pkg/mwaa"
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
 
@@ -61,11 +63,51 @@ func getEnvironment(ctx context.Context, client *mwaa.Client) (string, error) {
 		return "", fmt.Errorf("failed to list environments: %w", err)
 	}
 
-	if len(environments) != 1 {
-		return "", fmt.Errorf("environment name is required")
+	if len(environments) == 1 {
+		return environments[0], nil
 	}
 
-	return environments[0], nil
+	if len(environments) > 1 {
+		environment, err := chooseEnvironment(environments)
+		if err != nil {
+			return "", fmt.Errorf("failed to choose environment: %w", err)
+		}
+
+		return environment, nil
+	}
+
+	return "", fmt.Errorf("no environments found")
+}
+
+func chooseEnvironment(environments []string) (string, error) {
+	templates := &promptui.SelectTemplates{
+		Active:   fmt.Sprintf("%s {{ . | cyan | bold }}", promptui.IconSelect),
+		Inactive: "  {{ . | cyan }}",
+		Selected: fmt.Sprintf("%s {{ . | cyan }}", promptui.IconGood),
+	}
+
+	searcher := func(input string, index int) bool {
+		environment := environments[index]
+		name := strings.Replace(strings.ToLower(environment), " ", "", -1)
+		input = strings.Replace(strings.ToLower(input), " ", "", -1)
+
+		return strings.Contains(name, input)
+	}
+
+	prompt := promptui.Select{
+		Label:     "Choose an environment",
+		Items:     environments,
+		Templates: templates,
+		Size:      15,
+		Searcher:  searcher,
+	}
+
+	i, _, err := prompt.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return environments[i], nil
 }
 
 func printJSON(cmd *cobra.Command, v any) error {
