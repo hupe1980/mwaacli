@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,6 +11,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/hupe1980/mwaacli/pkg/config"
 	"github.com/hupe1980/mwaacli/pkg/local"
+	"github.com/hupe1980/mwaacli/pkg/mwaa"
 	"github.com/hupe1980/mwaacli/pkg/util"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +34,7 @@ func newLocalCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.AddCommand(newTestRequirementsCommand(globalOpts))
 	cmd.AddCommand(newPackageRequirementsCommand(globalOpts))
 	cmd.AddCommand(newTestStartupScriptCommand(globalOpts))
+	cmd.AddCommand(newSyncCommand(globalOpts))
 
 	return cmd
 }
@@ -356,6 +359,65 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
+
+	return cmd
+}
+
+func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
+	var (
+		version     string
+		awsCreds    bool
+		roleARN     string
+		mwaaEnvName string
+	)
+
+	cmd := &cobra.Command{
+		Use:           "sync",
+		Short:         "",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+			if err != nil {
+				return err
+			}
+
+			mwaaClient := mwaa.NewClient(cfg)
+
+			ctx := context.Background()
+			if mwaaEnvName == "" {
+				mwaaEnvName, err = getEnvironment(ctx, mwaaClient)
+				if err != nil {
+					return err
+				}
+			}
+
+			environment, err := mwaaClient.GetEnvironment(ctx, mwaaEnvName)
+			if err != nil {
+				return err
+			}
+
+			// Extract bucket name from ARN
+			bucketArn := aws.ToString(environment.SourceBucketArn)
+			bucketName := strings.Split(bucketArn, ":")[5] // Extracts the bucket name
+
+			//s3Client := s3.NewClient(cfg)
+
+			if pluginsPath := environment.PluginsS3Path; pluginsPath != nil {
+				cmd.Printf("Remote Plugins Path: s3://%s/%s\n", bucketName, aws.ToString(pluginsPath))
+			} else {
+				cmd.Println("No remote plugins path configured.")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
+	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
+	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
+
+	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
 
 	return cmd
 }

@@ -57,6 +57,9 @@ func newRootCmd(version string) *cobra.Command {
 	return cmd
 }
 
+// getEnvironment retrieves the MWAA environment to use.
+// If there is only one environment, it is returned automatically.
+// If there are multiple environments, the user is prompted to choose one.
 func getEnvironment(ctx context.Context, client *mwaa.Client) (string, error) {
 	environments, err := client.ListEnvironments(ctx)
 	if err != nil {
@@ -79,6 +82,8 @@ func getEnvironment(ctx context.Context, client *mwaa.Client) (string, error) {
 	return "", fmt.Errorf("no environments found")
 }
 
+// chooseEnvironment prompts the user to select an MWAA environment from a list.
+// It uses a fuzzy search to filter environments based on user input.
 func chooseEnvironment(environments []string) (string, error) {
 	templates := &promptui.SelectTemplates{
 		Active:   fmt.Sprintf("%s {{ . | cyan | bold }}", promptui.IconSelect),
@@ -110,6 +115,8 @@ func chooseEnvironment(environments []string) (string, error) {
 	return environments[i], nil
 }
 
+// printJSON prints the given value as a formatted JSON string to the command output.
+// It returns an error if the value cannot be marshaled to JSON.
 func printJSON(cmd *cobra.Command, v any) error {
 	json, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

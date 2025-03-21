@@ -31,11 +31,7 @@ for a list of supported commands.`,
 				return fmt.Errorf("failed to load AWS config: %w", err)
 			}
 
-			// Create an MWAA client
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create MWAA client: %w", err)
-			}
+			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
 

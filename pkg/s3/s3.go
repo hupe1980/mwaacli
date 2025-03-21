@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/hupe1980/mwaacli/pkg/config"
 )
 
 type Client struct {
@@ -20,23 +21,35 @@ type Client struct {
 }
 
 // NewClient creates a new Client with the provided AWS configuration.
-func NewClient(cfg aws.Config) *Client {
+func NewClient(cfg *config.Config) *Client {
 	return &Client{
-		client: s3.NewFromConfig(cfg),
+		client: s3.NewFromConfig(cfg.AWSConfig),
 	}
 }
 
+// DownloadAndUnzipInput defines the input parameters for the DownloadAndUnzip method.
+type DownloadAndUnzipInput struct {
+	Bucket  *string // S3 bucket name
+	Key     *string // S3 object key
+	Version *string // Optional S3 object version
+	DestDir *string // Destination directory for unzipping
+}
+
 // DownloadAndUnzip downloads a file from S3 and unzips it to the specified directory.
-func (s *Client) DownloadAndUnzip(ctx context.Context, s3Path, destDir string) error {
-	bucket, key, err := parseS3Path(s3Path)
-	if err != nil {
-		return fmt.Errorf("invalid S3 path: %w", err)
+func (s *Client) DownloadAndUnzip(ctx context.Context, input *DownloadAndUnzipInput) error {
+	if input.Bucket == nil || input.Key == nil || input.DestDir == nil {
+		return fmt.Errorf("bucket, key, and destDir are required")
 	}
 
-	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
+	// Prepare the GetObjectInput
+	getObjectInput := &s3.GetObjectInput{
+		Bucket:    input.Bucket,
+		Key:       input.Key,
+		VersionId: input.Version, // Directly assign the version pointer
+	}
+
+	// Get the object from S3
+	output, err := s.client.GetObject(ctx, getObjectInput)
 	if err != nil {
 		return fmt.Errorf("failed to download file from S3: %w", err)
 	}
@@ -49,23 +62,30 @@ func (s *Client) DownloadAndUnzip(ctx context.Context, s3Path, destDir string) e
 	}
 
 	// Unzip the file
-	if err := unzip(buf.Bytes(), destDir); err != nil {
+	if err := unzip(buf.Bytes(), aws.ToString(input.DestDir)); err != nil {
 		return fmt.Errorf("failed to unzip file: %w", err)
 	}
 
 	return nil
 }
 
+// SyncDirectoryInput defines the input parameters for the SyncDirectory method.
+type SyncDirectoryInput struct {
+	Bucket   *string // S3 bucket name
+	Prefix   *string // S3 prefix for the directory
+	LocalDir *string // Local directory to sync files to
+}
+
 // SyncDirectory synchronizes files from an S3 bucket to a local directory.
-func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) error {
-	bucket, prefix, err := parseS3Path(s3Path)
-	if err != nil {
-		return fmt.Errorf("invalid S3 path: %w", err)
+func (s *Client) SyncDirectory(ctx context.Context, input *SyncDirectoryInput) error {
+	if input.Bucket == nil || input.Prefix == nil || input.LocalDir == nil {
+		return fmt.Errorf("bucket, prefix, and localDir are required")
 	}
 
+	// List objects in the S3 bucket
 	listOutput, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
-		Prefix: aws.String(prefix),
+		Bucket: input.Bucket,
+		Prefix: input.Prefix,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list objects in S3 bucket: %w", err)
@@ -75,18 +95,18 @@ func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) err
 	s3Objects := make(map[string]types.Object)
 
 	for _, obj := range listOutput.Contents {
-		relativePath := strings.TrimPrefix(*obj.Key, prefix)
+		relativePath := strings.TrimPrefix(aws.ToString(obj.Key), aws.ToString(input.Prefix))
 		s3Objects[relativePath] = obj
 	}
 
 	// Ensure the local directory exists
-	if err := os.MkdirAll(localDir, 0755); err != nil {
+	if err := os.MkdirAll(*input.LocalDir, 0755); err != nil {
 		return fmt.Errorf("failed to create local directory: %w", err)
 	}
 
 	// Download files from S3
 	for relativePath, obj := range s3Objects {
-		localFilePath := filepath.Join(localDir, relativePath)
+		localFilePath := filepath.Join(*input.LocalDir, relativePath)
 
 		// Create parent directories if necessary
 		if err := os.MkdirAll(filepath.Dir(localFilePath), 0755); err != nil {
@@ -95,7 +115,7 @@ func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) err
 
 		// Download the file
 		getOutput, err := s.client.GetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(bucket),
+			Bucket: input.Bucket,
 			Key:    obj.Key,
 		})
 		if err != nil {
@@ -115,13 +135,13 @@ func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) err
 		}
 
 		// Set the file's modification time to match the S3 object's LastModified
-		if err := os.Chtimes(localFilePath, *obj.LastModified, *obj.LastModified); err != nil {
+		if err := os.Chtimes(localFilePath, aws.ToTime(obj.LastModified), aws.ToTime(obj.LastModified)); err != nil {
 			return fmt.Errorf("failed to set timestamp for %s: %w", localFilePath, err)
 		}
 	}
 
 	// Delete local files not present in the S3 bucket
-	err = filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(aws.ToString(input.LocalDir), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -132,7 +152,7 @@ func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) err
 		}
 
 		// Get the relative path of the local file
-		relativePath, err := filepath.Rel(localDir, path)
+		relativePath, err := filepath.Rel(aws.ToString(input.LocalDir), path)
 		if err != nil {
 			return err
 		}
@@ -152,23 +172,6 @@ func (s *Client) SyncDirectory(ctx context.Context, s3Path, localDir string) err
 	}
 
 	return nil
-}
-
-// parseS3Path parses an S3 path into bucket and key/prefix.
-func parseS3Path(s3Path string) (bucket, key string, err error) {
-	if !strings.HasPrefix(s3Path, "s3://") {
-		return "", "", fmt.Errorf("invalid S3 path: %s", s3Path)
-	}
-
-	parts := strings.SplitN(s3Path[5:], "/", 2)
-
-	bucket = parts[0]
-
-	if len(parts) > 1 {
-		key = parts[1]
-	}
-
-	return bucket, key, nil
 }
 
 // unzip extracts a zip archive from a byte slice to a destination directory.

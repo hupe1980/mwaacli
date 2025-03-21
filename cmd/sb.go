@@ -37,6 +37,7 @@ func newListSBConnectionsCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
+
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
 				return err
@@ -66,6 +67,7 @@ func newListSBVariablesCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
+
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
 				return err
@@ -96,6 +98,7 @@ func newGetSBConnectionCommand(globalOpts *globalOptions) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
 				return err
@@ -132,6 +135,7 @@ func newGetSBVariableCommand(globalOpts *globalOptions) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			secretsBackendClient, err := initSecretsBackendClient(ctx, globalOpts, &mwaaEnvName)
 			if err != nil {
 				return err
@@ -164,10 +168,7 @@ func initSecretsBackendClient(ctx context.Context, globalOpts *globalOptions, mw
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	client, err := mwaa.NewClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MWAA client: %w", err)
-	}
+	client := mwaa.NewClient(cfg)
 
 	if *mwaaEnvName == "" {
 		*mwaaEnvName, err = getEnvironment(ctx, client)

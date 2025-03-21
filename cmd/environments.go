@@ -35,10 +35,7 @@ func newListEnvironmentsCommand(globalOpts *globalOptions) *cobra.Command {
 				return err
 			}
 
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return err
-			}
+			client := mwaa.NewClient(cfg)
 
 			environments, err := client.ListEnvironments(context.Background())
 			if err != nil {
@@ -65,10 +62,7 @@ func newGetEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
 				return err
 			}
 
-			client, err := mwaa.NewClient(cfg)
-			if err != nil {
-				return err
-			}
+			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
 			var mwaaEnvName string

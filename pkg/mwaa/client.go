@@ -21,10 +21,10 @@ type Client struct {
 }
 
 // NewClient initializes a new MWAA client with the provided configuration.
-func NewClient(cfg *config.Config) (*Client, error) {
+func NewClient(cfg *config.Config) *Client {
 	return &Client{
 		client: awsmwaa.NewFromConfig(cfg.AWSConfig),
-	}, nil
+	}
 }
 
 // CreateCliToken generates a CLI token for the specified MWAA environment.
