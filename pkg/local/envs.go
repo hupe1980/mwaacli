@@ -8,22 +8,26 @@ import (
 	"github.com/hupe1980/mwaacli/pkg/util"
 )
 
+// AWSCredentials represents AWS credentials and the associated region.
 type AWSCredentials struct {
 	aws.Credentials
-	Region string
+	Region string // AWS region
 }
 
+// Envs represents environment variables required for the MWAA local runner.
 type Envs struct {
-	Credentials        *AWSCredentials
-	S3DagsPath         string
-	S3RequirementsPath string
-	S3PluginsPath      string
+	Credentials        *AWSCredentials // AWS credentials
+	S3DagsPath         string          // Path to the S3 bucket for DAGs
+	S3RequirementsPath string          // Path to the S3 bucket for requirements
+	S3PluginsPath      string          // Path to the S3 bucket for plugins
 }
 
-// ToSlice converts the AWS credentials into a slice of environment variable strings.
+// ToSlice converts the AWS credentials and other environment variables into a slice of strings.
+// Each string is formatted as "KEY=VALUE".
 func (e *Envs) ToSlice() []string {
 	var envVars []string
 
+	// Add AWS credentials to the environment variables
 	if e.Credentials != nil {
 		if e.Credentials.AccessKeyID != "" {
 			envVars = append(envVars, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", e.Credentials.AccessKeyID))
@@ -58,6 +62,7 @@ func (e *Envs) ToSlice() []string {
 	return envVars
 }
 
+// buildEnvironmentVariables constructs the environment variables required for the MWAA local runner.
 func (r *Runner) buildEnvironmentVariables(envs *Envs) ([]string, error) {
 	// Parse the .env file
 	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
@@ -70,8 +75,9 @@ func (r *Runner) buildEnvironmentVariables(envs *Envs) ([]string, error) {
 	// Append default environment variables
 	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
 
-	// Adds extra Envs if provided
+	// Add extra environment variables if provided
 	mwaaEnv = append(mwaaEnv, envs.ToSlice()...)
 
+	// Merge environment variables and remove duplicates
 	return util.MergeEnvVars(mwaaEnv, true), nil
 }

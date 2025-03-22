@@ -137,15 +137,6 @@ func MergeEnvVars(envVars []string, ignoreEmptyValues bool) []string {
 	return mergedEnvVars
 }
 
-// ShortContainerID shortens a Docker container ID to the first 12 characters.
-func ShortContainerID(containerID string) string {
-	if len(containerID) > 12 {
-		return containerID[:12]
-	}
-
-	return containerID
-}
-
 // IsValidARN checks if the provided string is a valid AWS ARN.
 func IsValidARN(arn string) error {
 	// Regular expression to match the ARN format

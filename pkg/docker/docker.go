@@ -15,7 +15,6 @@ import (
 	dockerClient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/hupe1980/mwaacli/pkg/util"
 	"github.com/moby/term"
 )
 
@@ -113,7 +112,7 @@ func (c *Client) RunContainer(ctx context.Context, containerConfig *container.Co
 		return "", fmt.Errorf("failed to start container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Started container %s with ID %s\n", containerName, util.ShortContainerID(containerID))
+	fmt.Printf("Started container %s with ID %s\n", containerName, ShortContainerID(containerID))
 
 	return containerID, nil
 }
@@ -144,7 +143,7 @@ func (c *Client) ensureContainer(ctx context.Context, containerConfig *container
 		return "", fmt.Errorf("failed to create container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Created new container %s with ID %s\n", containerName, util.ShortContainerID(resp.ID))
+	fmt.Printf("Created new container %s with ID %s\n", containerName, ShortContainerID(resp.ID))
 
 	return resp.ID, nil
 }
@@ -194,22 +193,22 @@ func (c *Client) WaitForContainerReady(ctx context.Context, containerID string, 
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timeout reached while waiting for container %s to be ready", util.ShortContainerID(containerID))
+			return fmt.Errorf("timeout reached while waiting for container %s to be ready", ShortContainerID(containerID))
 		case <-ticker.C:
 			containerJSON, err := c.client.ContainerInspect(ctx, containerID)
 			if err != nil {
-				return fmt.Errorf("failed to inspect container %s: %w", util.ShortContainerID(containerID), err)
+				return fmt.Errorf("failed to inspect container %s: %w", ShortContainerID(containerID), err)
 			}
 
 			if containerJSON.State.Running {
-				fmt.Printf("Container %s is now running.\n", util.ShortContainerID(containerID))
+				fmt.Printf("Container %s is now running.\n", ShortContainerID(containerID))
 				return nil
 			}
 
 			if containerJSON.State.Restarting {
-				fmt.Printf("Container %s is restarting, waiting...\n", util.ShortContainerID(containerID))
+				fmt.Printf("Container %s is restarting, waiting...\n", ShortContainerID(containerID))
 			} else if containerJSON.State.Dead || containerJSON.State.ExitCode != 0 {
-				return fmt.Errorf("container %s exited unexpectedly with code %d", util.ShortContainerID(containerID), containerJSON.State.ExitCode)
+				return fmt.Errorf("container %s exited unexpectedly with code %d", ShortContainerID(containerID), containerJSON.State.ExitCode)
 			}
 		}
 	}
@@ -293,4 +292,13 @@ func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string,
 // Close closes the Docker client.
 func (c *Client) Close() error {
 	return c.client.Close()
+}
+
+// ShortContainerID shortens a Docker container ID to the first 12 characters.
+func ShortContainerID(containerID string) string {
+	if len(containerID) > 12 {
+		return containerID[:12]
+	}
+
+	return containerID
 }
