@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -46,7 +48,7 @@ func (c *Client) CreateWebLoginToken(ctx context.Context, environmentName string
 }
 
 // InvokeRestAPI sends a REST API request to the MWAA environment with the specified method and payload.
-func (c *Client) InvokeRestAPI(ctx context.Context, method types.RestApiMethod, environmentName, path string, queryParams map[string]any, body any) (*awsmwaa.InvokeRestApiOutput, error) {
+func (c *Client) InvokeRestAPI(ctx context.Context, method types.RestApiMethod, environmentName, path string, queryParams, body any) (*awsmwaa.InvokeRestApiOutput, error) {
 	input := &awsmwaa.InvokeRestApiInput{
 		Method:          method,
 		Name:            aws.String(environmentName),
@@ -55,7 +57,40 @@ func (c *Client) InvokeRestAPI(ctx context.Context, method types.RestApiMethod, 
 		Body:            document.NewLazyDocument(body),
 	}
 
-	return c.client.InvokeRestApi(ctx, input)
+	output, err := c.client.InvokeRestApi(ctx, input)
+	if err != nil {
+		return nil, c.handleRestAPIError(err)
+	}
+
+	return output, nil
+}
+
+// handleRestAPIError processes and formats REST API errors.
+func (c *Client) handleRestAPIError(err error) error {
+	var (
+		clientErr *types.RestApiClientException
+		serverErr *types.RestApiServerException
+	)
+
+	if errors.As(err, &clientErr) {
+		return c.formatRestAPIError(clientErr.RestApiResponse, clientErr.RestApiStatusCode)
+	}
+
+	if errors.As(err, &serverErr) {
+		return c.formatRestAPIError(serverErr.RestApiResponse, serverErr.RestApiStatusCode)
+	}
+
+	return err
+}
+
+// formatRestAPIError extracts error details from the response.
+func (c *Client) formatRestAPIError(response document.Interface, statusCode *int32) error {
+	var errorRsp map[string]any
+	if err := response.UnmarshalSmithyDocument(&errorRsp); err == nil {
+		return fmt.Errorf("%s: %s (HTTP StatusCode %d)", errorRsp["title"], errorRsp["detail"], aws.ToInt32(statusCode))
+	}
+
+	return fmt.Errorf("%s (HTTP StatusCode %d)", response, aws.ToInt32(statusCode))
 }
 
 // InvokeCliCommand executes a CLI command on the specified MWAA environment.
@@ -72,7 +107,7 @@ func (c *Client) InvokeCliCommand(ctx context.Context, mwaaEnvName, command stri
 	mwaaWebserverHostname := fmt.Sprintf("https://%s/aws_mwaa/cli", aws.ToString(cliTokenOutput.WebServerHostname))
 
 	// Create HTTP request
-	req, err := http.NewRequest(http.MethodPost, mwaaWebserverHostname, strings.NewReader(command))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mwaaWebserverHostname, strings.NewReader(command))
 	if err != nil {
 		return 0, "", "", err
 	}
@@ -87,6 +122,16 @@ func (c *Client) InvokeCliCommand(ctx context.Context, mwaaEnvName, command stri
 		return 0, "", "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Print response body if an error occurred
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, "", "", err
+		}
+
+		return resp.StatusCode, "", "", fmt.Errorf("%s (HTTP StatusCode %d)", string(body), resp.StatusCode)
+	}
 
 	// Decode response body
 	var response map[string]string

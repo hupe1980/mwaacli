@@ -76,15 +76,21 @@ func (r *Runner) BuildImage(ctx context.Context) error {
 }
 
 type StartOptions struct {
-	Port    string
-	ResetDB bool
-	Envs    *Envs
+	Port               string
+	ResetDB            bool
+	Envs               *Envs
+	FallowLogs         bool
+	OnLocalRunnerStart func() error
 }
 
 func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) error {
 	opts := StartOptions{
-		Port: "8080",
-		Envs: nil,
+		Port:       "8080",
+		Envs:       nil,
+		FallowLogs: false,
+		OnLocalRunnerStart: func() error {
+			return nil
+		},
 	}
 
 	for _, fn := range optFns {
@@ -212,8 +218,17 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 		LogConfig: logConfig,
 	}
 
-	if _, err := r.client.RunContainer(ctx, localRunnerConfig, localRunnerHostConfig, networkConfig, "local-runner"); err != nil {
+	containerID, err := r.client.RunContainer(ctx, localRunnerConfig, localRunnerHostConfig, networkConfig, "local-runner")
+	if err != nil {
 		return fmt.Errorf("failed to create and start MWAA Local Runner container: %w", err)
+	}
+
+	if err := opts.OnLocalRunnerStart(); err != nil {
+		return fmt.Errorf("failed to run OnLocalRunnerStart: %w", err)
+	}
+
+	if opts.FallowLogs {
+		return r.client.ContainerLogs(ctx, containerID)
 	}
 
 	return nil

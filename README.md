@@ -52,6 +52,7 @@ Available Commands:
   help         Help about any command
   local        Setup and control the AWS MWAA local runner
   open         Open the MWAA webapp in a browser
+  roles        Manage Airflow roles
   run          Execute an Airflow CLI command in MWAA
   sb           Manage secrets backend
   variables    Manage variables in MWAA

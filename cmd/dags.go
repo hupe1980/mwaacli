@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newDagsCommand creates the root command for managing DAGs in MWAA.
 func newDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dags",
@@ -23,6 +24,7 @@ func newDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
+// newListDagsCommand creates the command to list DAGs in MWAA.
 func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
 		limit        int
@@ -114,6 +116,7 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
+// newGetDagCommand creates the command to get details of a specific DAG.
 func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
 		fields      []string
@@ -166,6 +169,7 @@ func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
+// newGetDagSourceCommand creates the command to get the source code of a DAG.
 func newGetDagSourceCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
 		mwaaEnvName string

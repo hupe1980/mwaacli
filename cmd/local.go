@@ -34,6 +34,8 @@ func newLocalCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.AddCommand(newTestRequirementsCommand(globalOpts))
 	cmd.AddCommand(newPackageRequirementsCommand(globalOpts))
 	cmd.AddCommand(newTestStartupScriptCommand(globalOpts))
+	cmd.AddCommand(newSyncCommand(globalOpts))
+	cmd.AddCommand(newDiffCommand(globalOpts))
 
 	return cmd
 }
@@ -112,12 +114,12 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
 		version    string
-		open       bool
+		noBrowser  bool
 		port       string
 		resetDB    bool
-		syncConfig bool
 		awsCreds   bool
 		roleARN    string
+		followLogs bool
 	)
 
 	cmd := &cobra.Command{
@@ -153,79 +155,32 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 				envs.Credentials = creds
 			}
 
-			if syncConfig {
-				//TODO
-
-				cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
-				if err != nil {
-					return err
-				}
-
-				mwaaClient := mwaa.NewClient(cfg)
-
-				mwaaEnvName, err := getEnvironment(ctx, mwaaClient)
-				if err != nil {
-					return err
-				}
-
-				environment, err := mwaaClient.GetEnvironment(ctx, mwaaEnvName)
-				if err != nil {
-					return err
-				}
-
-				// Extract bucket name from ARN
-				bucketArn := aws.ToString(environment.SourceBucketArn)
-				bucketName := strings.Split(bucketArn, ":")[5] // Extracts the bucket name
-
-				if startupScriptPath := environment.StartupScriptS3Path; startupScriptPath != nil {
-					cmd.Printf("Remote Startup Script: s3://%s/%s\n", bucketName, aws.ToString(startupScriptPath))
-				} else {
-					cmd.Println("No remote startup script configured.")
-				}
-
-				if requirementsFile := environment.RequirementsS3Path; requirementsFile != nil {
-					cmd.Printf("Remote Requirements File: s3://%s/%s\n", bucketName, aws.ToString(requirementsFile))
-				} else {
-					cmd.Println("No remote requirements file configured.")
-				}
-
-				if pluginsPath := environment.PluginsS3Path; pluginsPath != nil {
-					cmd.Printf("Remote Plugins Path: s3://%s/%s\n", bucketName, aws.ToString(pluginsPath))
-				} else {
-					cmd.Println("No remote plugins path configured.")
-				}
-
-				cmd.Println("Syncing DAGs...")
-
-				if dagS3Path := environment.DagS3Path; dagS3Path != nil {
-					cmd.Printf("Remote DAGs Path: s3://%s/%s\n", bucketName, aws.ToString(dagS3Path))
-				} else {
-					cmd.Println("No remote DAGs path configured.")
-				}
-			}
-
 			if err := runner.Start(ctx, func(o *local.StartOptions) {
 				o.Port = port
 				o.ResetDB = resetDB
 				o.Envs = envs
+				o.FallowLogs = followLogs
+				o.OnLocalRunnerStart = func() error {
+					webserverURL := fmt.Sprintf("http://localhost:%s", port)
+
+					// Wait for the webserver to be ready
+					if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
+						return fmt.Errorf("application is not ready: %w", err)
+					}
+
+					if !noBrowser {
+						cmd.Println("Opening the Airflow UI in the default web browser...")
+						if err := util.OpenBrowser(webserverURL); err != nil {
+							return fmt.Errorf("failed to open the Airflow UI: %w", err)
+						}
+					} else {
+						cmd.Printf("You can access the Airflow UI at %s\n", webserverURL)
+					}
+
+					return nil
+				}
 			}); err != nil {
 				return fmt.Errorf("failed to start AWS MWAA local runner environment: %w", err)
-			}
-
-			webserverURL := fmt.Sprintf("http://localhost:%s", port)
-
-			// Wait for the webserver to be ready
-			if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
-				return fmt.Errorf("application is not ready: %w", err)
-			}
-
-			if open {
-				cmd.Println("Opening the Airflow UI in the default web browser...")
-				if err := util.OpenBrowser(webserverURL); err != nil {
-					return fmt.Errorf("failed to open the Airflow UI: %w", err)
-				}
-			} else {
-				cmd.Printf("You can access the Airflow UI at %s\n", webserverURL)
 			}
 
 			return nil
@@ -233,9 +188,9 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
-	cmd.Flags().BoolVar(&open, "open", false, "Open the Airflow UI in the default web browser after starting")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Do not open the Airflow UI in the default web browser after starting")
+	cmd.Flags().BoolVar(&followLogs, "follow-logs", false, "Follow the logs of the Airflow webserver and scheduler")
 	cmd.Flags().BoolVar(&resetDB, "reset-db", false, "Reset the Airflow database before starting")
-	cmd.Flags().BoolVar(&syncConfig, "sync-config", false, "Sync the Airflow configuration before starting")
 	cmd.Flags().StringVar(&port, "port", "8080", "Specify the port for the Airflow webserver")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
@@ -407,6 +362,148 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
+
+	return cmd
+}
+
+func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
+	var (
+		version  string
+		awsCreds bool
+		roleARN  string
+	)
+
+	cmd := &cobra.Command{
+		Use:           "sync",
+		Short:         "",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+			if err != nil {
+				return err
+			}
+
+			mwaaClient := mwaa.NewClient(cfg)
+
+			ctx := context.Background()
+
+			mwaaEnvName, err := getEnvironment(ctx, mwaaClient)
+			if err != nil {
+				return err
+			}
+
+			environment, err := mwaaClient.GetEnvironment(ctx, mwaaEnvName)
+			if err != nil {
+				return err
+			}
+
+			syncer := local.NewSyncer(cfg)
+
+			// Extract bucket name from ARN
+			bucketArn := aws.ToString(environment.SourceBucketArn)
+			bucketName := strings.Split(bucketArn, ":")[5] // Extracts the bucket name
+
+			if startupScriptPath := environment.StartupScriptS3Path; startupScriptPath != nil {
+				cmd.Printf("Remote Startup Script: s3://%s/%s\n", bucketName, aws.ToString(startupScriptPath))
+				if err := syncer.SyncStartupScript(ctx, &local.SyncStartupScriptInput{
+					Bucket:  aws.String(bucketName),
+					Key:     startupScriptPath,
+					Version: environment.StartupScriptS3ObjectVersion,
+				}); err != nil {
+					return fmt.Errorf("failed to sync startup script: %w", err)
+				}
+				cmd.Println("Startup script synced successfully.")
+			} else {
+				cmd.Println("No remote startup script configured.")
+			}
+
+			if requirementsFile := environment.RequirementsS3Path; requirementsFile != nil {
+				cmd.Printf("Remote Requirements File: s3://%s/%s\n", bucketName, aws.ToString(requirementsFile))
+				if err := syncer.SyncRequirementsTXT(ctx, &local.SyncRequirementsTXTInput{
+					Bucket:  aws.String(bucketName),
+					Key:     requirementsFile,
+					Version: environment.RequirementsS3ObjectVersion,
+				}); err != nil {
+					return fmt.Errorf("failed to sync requirements file: %w", err)
+				}
+				cmd.Println("Requirements file synced successfully.")
+			} else {
+				cmd.Println("No remote requirements file configured.")
+			}
+
+			if pluginsPath := environment.PluginsS3Path; pluginsPath != nil {
+				cmd.Printf("Remote Plugins Path: s3://%s/%s\n", bucketName, aws.ToString(pluginsPath))
+				// TODO
+			} else {
+				cmd.Println("No remote plugins path configured.")
+			}
+
+			cmd.Println("Syncing DAGs...")
+
+			if dagS3Path := environment.DagS3Path; dagS3Path != nil {
+				cmd.Printf("Remote DAGs Path: s3://%s/%s\n", bucketName, aws.ToString(dagS3Path))
+				// TODO
+			} else {
+				cmd.Println("No remote DAGs path configured.")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
+	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
+	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
+
+	return cmd
+}
+
+func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
+	var mwaaEnvName string
+
+	cmd := &cobra.Command{
+		Use:           "diff",
+		Short:         "Compare local Airflow configuration with the remote MWAA configuration",
+		Long:          "Fetch the remote Airflow configuration from the MWAA environment and compare it with the local configuration file.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
+			if err != nil {
+				return fmt.Errorf("failed to load AWS configuration: %w", err)
+			}
+
+			mwaaClient := mwaa.NewClient(cfg)
+
+			ctx := context.Background()
+
+			// Get the MWAA environment name if not provided
+			if mwaaEnvName == "" {
+				mwaaEnvName, err = getEnvironment(ctx, mwaaClient)
+				if err != nil {
+					return fmt.Errorf("failed to get MWAA environment: %w", err)
+				}
+			}
+
+			// Fetch the remote configuration
+			environment, err := mwaaClient.GetEnvironment(ctx, mwaaEnvName)
+			if err != nil {
+				return fmt.Errorf("failed to get MWAA environment: %w", err)
+			}
+
+			diffs, err := local.CompareAirflowConfigs(environment.AirflowConfigurationOptions)
+			if err != nil {
+				return fmt.Errorf("failed to compare configurations: %w", err)
+			}
+
+			cmd.Println(diffs.ToString())
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&mwaaEnvName, "env", "", "MWAA environment name")
 
 	return cmd
 }

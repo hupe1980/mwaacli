@@ -91,9 +91,9 @@ invalid_line_without_section
 			// Call the function
 			var result map[string]string
 			if tt.configContent != "" {
-				result, err = ConvertAirlfowCfgToMap(tempFile.Name())
+				result, err = ConvertAirflowCfgToMap(tempFile.Name())
 			} else {
-				result, err = ConvertAirlfowCfgToMap("nonexistent.cfg")
+				result, err = ConvertAirflowCfgToMap("nonexistent.cfg")
 			}
 
 			// Validate the result

@@ -1,13 +1,16 @@
 package util
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -166,4 +169,63 @@ func IsPortFree(port string) bool {
 	defer listener.Close()
 
 	return true
+}
+
+// Unzip extracts a zip archive from a byte slice to a destination directory.
+func Unzip(data []byte, dest string) error {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return fmt.Errorf("failed to create zip reader: %w", err)
+	}
+
+	for _, file := range reader.File {
+		filePath := filepath.Join(dest, filepath.Clean(file.Name))
+
+		// Ensure the file path is within the destination directory
+		if !strings.HasPrefix(filePath, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", filePath)
+		}
+
+		if file.FileInfo().IsDir() {
+			// Create directories
+			if err := os.MkdirAll(filePath, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", filePath, err)
+			}
+
+			continue
+		}
+
+		// Create the file
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return fmt.Errorf("failed to create directories for %s: %w", filePath, err)
+		}
+
+		outFile, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %w", filePath, err)
+		}
+		defer outFile.Close()
+
+		// Write the file content
+		rc, err := file.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open zip file %s: %w", file.Name, err)
+		}
+		defer rc.Close()
+
+		// Limit the size of data being copied to prevent decompression bomb attacks
+		const maxFileSize = 100 * 1024 * 1024 // 100 MB
+		if _, err := io.Copy(outFile, io.LimitReader(rc, maxFileSize)); err != nil {
+			return fmt.Errorf("failed to write to file %s: %w", filePath, err)
+		}
+	}
+
+	return nil
+}
+
+// StripNonPrintable removes non-printable characters from a string.
+func StripNonPrintable(input string) string {
+	// Match printable ASCII characters (32-126) and newline (10)
+	re := regexp.MustCompile(`[^\x20-\x7E\n]`)
+	return re.ReplaceAllString(input, "")
 }

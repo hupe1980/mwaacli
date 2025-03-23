@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/hupe1980/mwaacli/pkg/config"
+	"github.com/hupe1980/mwaacli/pkg/util"
 )
 
 type Client struct {
@@ -25,6 +25,49 @@ func NewClient(cfg *config.Config) *Client {
 	return &Client{
 		client: s3.NewFromConfig(cfg.AWSConfig),
 	}
+}
+
+// DownloadRequirementsInput defines the input parameters for the DownloadRequirementsFile method.
+type DownloadRequirementsInput struct {
+	Bucket    *string // S3 bucket name
+	Key       *string // S3 object key (e.g., "requirements.txt")
+	LocalPath *string // Local file path to overwrite (e.g., "requirements.txt")
+	Version   *string // Optional S3 object version
+}
+
+// DownloadFile downloads the remote file from S3 and overwrites or creates the local file.
+func (s *Client) DownloadFile(ctx context.Context, input *DownloadRequirementsInput) error {
+	if input.Bucket == nil || input.Key == nil || input.LocalPath == nil {
+		return fmt.Errorf("bucket, key, and localPath are required")
+	}
+
+	// Prepare the GetObjectInput
+	getObjectInput := &s3.GetObjectInput{
+		Bucket:    input.Bucket,
+		Key:       input.Key,
+		VersionId: input.Version, // Optional version
+	}
+
+	// Get the object from S3
+	output, err := s.client.GetObject(ctx, getObjectInput)
+	if err != nil {
+		return fmt.Errorf("failed to download file from S3: %w", err)
+	}
+	defer output.Body.Close()
+
+	// Create or overwrite the local file
+	localFile, err := os.Create(aws.ToString(input.LocalPath))
+	if err != nil {
+		return fmt.Errorf("failed to create local file '%s': %w", aws.ToString(input.LocalPath), err)
+	}
+	defer localFile.Close()
+
+	// Write the S3 object content to the local file
+	if _, err := io.Copy(localFile, output.Body); err != nil {
+		return fmt.Errorf("failed to write to local file '%s': %w", aws.ToString(input.LocalPath), err)
+	}
+
+	return nil
 }
 
 // DownloadAndUnzipInput defines the input parameters for the DownloadAndUnzip method.
@@ -62,7 +105,7 @@ func (s *Client) DownloadAndUnzip(ctx context.Context, input *DownloadAndUnzipIn
 	}
 
 	// Unzip the file
-	if err := unzip(buf.Bytes(), aws.ToString(input.DestDir)); err != nil {
+	if err := util.Unzip(buf.Bytes(), aws.ToString(input.DestDir)); err != nil {
 		return fmt.Errorf("failed to unzip file: %w", err)
 	}
 
@@ -169,58 +212,6 @@ func (s *Client) SyncDirectory(ctx context.Context, input *SyncDirectoryInput) e
 	})
 	if err != nil {
 		return fmt.Errorf("failed to clean up local files: %w", err)
-	}
-
-	return nil
-}
-
-// unzip extracts a zip archive from a byte slice to a destination directory.
-func unzip(data []byte, dest string) error {
-	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return fmt.Errorf("failed to create zip reader: %w", err)
-	}
-
-	for _, file := range reader.File {
-		filePath := filepath.Join(dest, filepath.Clean(file.Name))
-
-		// Ensure the file path is within the destination directory
-		if !strings.HasPrefix(filePath, filepath.Clean(dest)+string(os.PathSeparator)) {
-			return fmt.Errorf("illegal file path: %s", filePath)
-		}
-
-		if file.FileInfo().IsDir() {
-			// Create directories
-			if err := os.MkdirAll(filePath, 0755); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", filePath, err)
-			}
-
-			continue
-		}
-
-		// Create the file
-		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-			return fmt.Errorf("failed to create directories for %s: %w", filePath, err)
-		}
-
-		outFile, err := os.Create(filePath)
-		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", filePath, err)
-		}
-		defer outFile.Close()
-
-		// Write the file content
-		rc, err := file.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open zip file %s: %w", file.Name, err)
-		}
-		defer rc.Close()
-
-		// Limit the size of data being copied to prevent decompression bomb attacks
-		const maxFileSize = 100 * 1024 * 1024 // 100 MB
-		if _, err := io.Copy(outFile, io.LimitReader(rc, maxFileSize)); err != nil {
-			return fmt.Errorf("failed to write to file %s: %w", filePath, err)
-		}
 	}
 
 	return nil

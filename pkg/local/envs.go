@@ -76,7 +76,9 @@ func (r *Runner) buildEnvironmentVariables(envs *Envs) ([]string, error) {
 	mwaaEnv = append(mwaaEnv, "LOAD_EX=n", "EXECUTOR=Local")
 
 	// Add extra environment variables if provided
-	mwaaEnv = append(mwaaEnv, envs.ToSlice()...)
+	if envs != nil {
+		mwaaEnv = append(mwaaEnv, envs.ToSlice()...)
+	}
 
 	// Merge environment variables and remove duplicates
 	return util.MergeEnvVars(mwaaEnv, true), nil

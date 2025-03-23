@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	dockerClient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/hupe1980/mwaacli/pkg/util"
 	"github.com/moby/term"
 )
 
@@ -115,6 +117,36 @@ func (c *Client) RunContainer(ctx context.Context, containerConfig *container.Co
 	fmt.Printf("Started container %s with ID %s\n", containerName, ShortContainerID(containerID))
 
 	return containerID, nil
+}
+
+func (c *Client) ContainerLogs(ctx context.Context, containerID string) error {
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+	}
+
+	reader, err := c.client.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		return fmt.Errorf("failed to get container logs: %w", err)
+	}
+	defer reader.Close()
+
+	// Process and pretty-print the logs
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Strip non-printable characters
+		cleanLine := util.StripNonPrintable(line)
+		fmt.Println(cleanLine)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to read container logs: %w", err)
+	}
+
+	return nil
 }
 
 // ensureContainer ensures the container exists, creating it if necessary.
