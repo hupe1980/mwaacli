@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -34,16 +35,29 @@ type Runner struct {
 }
 
 // NewRunner creates a new MWAA installer
-func NewRunner(version string, optFns ...func(o *RunnerOptions)) (*Runner, error) {
+func NewRunner(optFns ...func(o *RunnerOptions)) (*Runner, error) {
 	opts := RunnerOptions{
-		ClonePath:      DefaultClonePath,
-		NetworkName:    fmt.Sprintf("aws-mwaa-local-runner-%s_default", convertVersion(version)),
-		DagsPath:       ".",
-		ContainerLabel: fmt.Sprintf("aws-mwaa-local-runner-%s", convertVersion(version)),
+		ClonePath: DefaultClonePath,
+		DagsPath:  ".",
 	}
 
 	for _, fn := range optFns {
 		fn(&opts)
+	}
+
+	version, err := readVersion(filepath.Join(opts.ClonePath, "VERSION"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read version: %w", err)
+	}
+
+	// Set default values if not provided
+	versionStr := convertVersion(version)
+	if opts.NetworkName == "" {
+		opts.NetworkName = fmt.Sprintf("aws-mwaa-local-runner-%s_default", versionStr)
+	}
+
+	if opts.ContainerLabel == "" {
+		opts.ContainerLabel = fmt.Sprintf("aws-mwaa-local-runner-%s", versionStr)
 	}
 
 	client, err := docker.NewClient()
@@ -97,10 +111,6 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 		fn(&opts)
 	}
 
-	if !util.IsPortFree(opts.Port) {
-		return fmt.Errorf("port %s is already in use", opts.Port)
-	}
-
 	containers, err := r.client.ListContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel), false)
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -108,6 +118,10 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 
 	if len(containers) > 0 {
 		return fmt.Errorf("airflow local environment is already running")
+	}
+
+	if !util.IsPortFree(opts.Port) {
+		return fmt.Errorf("port %s is already in use", opts.Port)
 	}
 
 	dockerComposeLocal, err := docker.ParseDockerCompose(filepath.Join(r.opts.ClonePath, "docker", "docker-compose-local.yml"))
@@ -291,4 +305,18 @@ func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string)
 
 func (r *Runner) Close() error {
 	return r.client.Close()
+}
+
+// readVersion reads the version from the specified file.
+func readVersion(filePath string) (string, error) {
+	// Read the file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read version file: %w", err)
+	}
+
+	// Trim any whitespace or newline characters
+	version := strings.TrimSpace(string(content))
+
+	return fmt.Sprintf("v%s", version), nil
 }

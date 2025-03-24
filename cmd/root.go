@@ -1,3 +1,7 @@
+// Package cmd provides the command-line interface (CLI) implementation for mwaacli.
+// It defines the root command and its subcommands for interacting with Amazon Managed Workflows
+// for Apache Airflow (MWAA). This package includes functionality for managing DAGs, environments,
+// roles, variables, and other MWAA-related resources.
 package cmd
 
 import (

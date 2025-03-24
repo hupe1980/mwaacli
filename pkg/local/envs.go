@@ -64,7 +64,7 @@ func (e *Envs) ToSlice() []string {
 
 // buildEnvironmentVariables constructs the environment variables required for the MWAA local runner.
 func (r *Runner) buildEnvironmentVariables(envs *Envs) ([]string, error) {
-	// Parse the .env file
+	// Parse the .env.localrunner file
 	envFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", ".env.localrunner")
 
 	mwaaEnv, err := util.ParseEnvFile(envFilePath)

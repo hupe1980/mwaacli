@@ -1,3 +1,5 @@
+// Package docker provides a client for interacting with the Docker daemon.
+// It includes functionality for building images, running containers, and streaming logs.
 package docker
 
 import (
@@ -119,6 +121,7 @@ func (c *Client) RunContainer(ctx context.Context, containerConfig *container.Co
 	return containerID, nil
 }
 
+// ContainerLogs streams logs from a container.
 func (c *Client) ContainerLogs(ctx context.Context, containerID string) error {
 	options := container.LogsOptions{
 		ShowStdout: true,

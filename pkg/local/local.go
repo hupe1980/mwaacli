@@ -1,3 +1,6 @@
+// Package local provides utilities and constants for managing the AWS MWAA local runner environment.
+// It includes functionality for cloning the MWAA local runner repository, managing container labels,
+// and converting version strings to formats compatible with the MWAA local runner.
 package local
 
 import "strings"

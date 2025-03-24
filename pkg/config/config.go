@@ -1,3 +1,7 @@
+// Package config provides utilities for initializing and managing AWS configuration details.
+// It includes functionality for loading AWS credentials, setting the region, and retrieving
+// the AWS account ID. This package is designed to simplify the setup of AWS SDK clients
+// and ensure consistent configuration across the application.
 package config
 
 import (

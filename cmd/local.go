@@ -78,8 +78,6 @@ func newInitCommand(_ *globalOptions) *cobra.Command {
 }
 
 func newBuildImageCommand(_ *globalOptions) *cobra.Command {
-	var version string
-
 	cmd := &cobra.Command{
 		Use:           "build-image",
 		Short:         "Build the Docker image for the AWS MWAA local runner",
@@ -88,7 +86,7 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Println("Building the Docker image for the AWS MWAA local runner...")
 
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -106,14 +104,11 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
-
 	return cmd
 }
 
 func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
-		version    string
 		noBrowser  bool
 		port       string
 		resetDB    bool
@@ -132,7 +127,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 			ctx := context.Background()
 
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -187,7 +182,6 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Do not open the Airflow UI in the default web browser after starting")
 	cmd.Flags().BoolVar(&followLogs, "follow-logs", false, "Follow the logs of the Airflow webserver and scheduler")
 	cmd.Flags().BoolVar(&resetDB, "reset-db", false, "Reset the Airflow database before starting")
@@ -199,8 +193,6 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 }
 
 func newStopCommand(_ *globalOptions) *cobra.Command {
-	var version string
-
 	cmd := &cobra.Command{
 		Use:           "stop",
 		Short:         "Stop the AWS MWAA local runner environment",
@@ -208,7 +200,7 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Println("Stopping the AWS MWAA local runner environment...")
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -225,14 +217,10 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for the AWS MWAA local runner")
-
 	return cmd
 }
 
 func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
-	var version string
-
 	cmd := &cobra.Command{
 		Use:           "test-requirements",
 		Short:         "Test installing requirements in an ephemeral container instance",
@@ -243,7 +231,7 @@ func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
 
 			ctx := context.Background()
 
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -264,14 +252,10 @@ func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing requirements")
-
 	return cmd
 }
 
 func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
-	var version string
-
 	cmd := &cobra.Command{
 		Use:           "package-requirements",
 		Short:         "Package Python requirements into a ZIP file for AWS MWAA",
@@ -282,7 +266,7 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 
 			ctx := context.Background()
 
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -303,14 +287,11 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for packaging requirements")
-
 	return cmd
 }
 
 func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
-		version  string
 		awsCreds bool
 		roleARN  string
 	)
@@ -324,7 +305,7 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 			cmd.Println("Testing startup script execution in an ephemeral container...")
 
 			ctx := context.Background()
-			runner, err := local.NewRunner(version)
+			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
@@ -359,7 +340,6 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 
@@ -368,7 +348,6 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 
 func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
 	var (
-		version  string
 		awsCreds bool
 		roleARN  string
 	)
@@ -452,7 +431,6 @@ func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&version, "version", defaultVersion, "Specify the Airflow version for testing the startup script")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
 
