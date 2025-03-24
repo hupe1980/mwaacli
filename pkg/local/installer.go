@@ -90,6 +90,11 @@ func (i *Installer) Run() error {
 			// Skip files and directories
 			return nil
 		} else if strings.HasPrefix(f.Name, "dags") {
+			// Skip if dagsPath exists
+			if _, err := os.Stat(filepath.Join(i.cwd, i.opts.DagsPath)); err == nil {
+				return nil
+			}
+
 			return createFile(filepath.Join(i.cwd, i.opts.DagsPath), f)
 		} else if matched, _ := regexp.MatchString(`^(plugins|requirements|startup_script)`, f.Name); matched {
 			return createFile(filepath.Join(i.cwd, i.opts.ClonePath), f)
