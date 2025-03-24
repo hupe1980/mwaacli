@@ -51,6 +51,7 @@ Available Commands:
   environments Manage MWAA environments
   help         Help about any command
   local        Setup and control the AWS MWAA local runner
+  logs         Fetch logs from CloudWatch for an MWAA environment
   open         Open the MWAA webapp in a browser
   roles        Manage Airflow roles
   run          Execute an Airflow CLI command in MWAA

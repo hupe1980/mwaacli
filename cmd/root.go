@@ -53,6 +53,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newDagsCommand(&opts))
 	cmd.AddCommand(newEnvironmentsCommand(&opts))
 	cmd.AddCommand(newLocalCommand(&opts))
+	cmd.AddCommand(newLogsCommand(&opts))
 	cmd.AddCommand(newOpenCommand(&opts))
 	cmd.AddCommand(newRolesCommand(&opts))
 	cmd.AddCommand(newRunCommand(&opts))
