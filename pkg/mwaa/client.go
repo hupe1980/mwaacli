@@ -1,3 +1,6 @@
+// Package mwaa provides a client for interacting with AWS Managed Workflows for Apache Airflow (MWAA).
+// It includes methods for managing MWAA environments, invoking REST API commands, generating CLI tokens,
+// and executing CLI commands on MWAA environments.
 package mwaa
 
 import (

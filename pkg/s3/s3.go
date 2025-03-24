@@ -27,8 +27,8 @@ func NewClient(cfg *config.Config) *Client {
 	}
 }
 
-// DownloadRequirementsInput defines the input parameters for the DownloadRequirementsFile method.
-type DownloadRequirementsInput struct {
+// DownloadFileInput defines the input parameters for the DownloadFile method.
+type DownloadFileInput struct {
 	Bucket    *string // S3 bucket name
 	Key       *string // S3 object key (e.g., "requirements.txt")
 	LocalPath *string // Local file path to overwrite (e.g., "requirements.txt")
@@ -36,7 +36,7 @@ type DownloadRequirementsInput struct {
 }
 
 // DownloadFile downloads the remote file from S3 and overwrites or creates the local file.
-func (s *Client) DownloadFile(ctx context.Context, input *DownloadRequirementsInput) error {
+func (s *Client) DownloadFile(ctx context.Context, input *DownloadFileInput) error {
 	if input.Bucket == nil || input.Key == nil || input.LocalPath == nil {
 		return fmt.Errorf("bucket, key, and localPath are required")
 	}

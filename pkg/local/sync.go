@@ -28,7 +28,7 @@ type SyncRequirementsTXTInput struct {
 func (s *Syncer) SyncRequirementsTXT(ctx context.Context, input *SyncRequirementsTXTInput) error {
 	localPath := filepath.Join(DefaultClonePath, "requirements", "requirements.txt")
 
-	return s.s3Client.DownloadFile(ctx, &s3.DownloadRequirementsInput{
+	return s.s3Client.DownloadFile(ctx, &s3.DownloadFileInput{
 		Bucket:    input.Bucket,
 		Key:       input.Key,
 		Version:   input.Version,
@@ -45,7 +45,7 @@ type SyncStartupScriptInput struct {
 func (s *Syncer) SyncStartupScript(ctx context.Context, input *SyncStartupScriptInput) error {
 	localPath := filepath.Join(DefaultClonePath, "startup_script", "startup.sh")
 
-	return s.s3Client.DownloadFile(ctx, &s3.DownloadRequirementsInput{
+	return s.s3Client.DownloadFile(ctx, &s3.DownloadFileInput{
 		Bucket:    input.Bucket,
 		Key:       input.Key,
 		Version:   input.Version,
