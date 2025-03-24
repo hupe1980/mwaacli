@@ -113,9 +113,9 @@ func (ds Diffs) ToString() string {
 
 // CompareAirflowConfigs compares the local Airflow configuration to a remote configuration map.
 // It returns a list of Diff objects that describe the differences between the two configurations.
-func CompareAirflowConfigs(remoteConfig map[string]string) (Diffs, error) {
+func (r *Runner) CompareAirflowConfigs(remoteConfig map[string]string) (Diffs, error) {
 	// Define the local config file path
-	cfgFilePath := filepath.Join(DefaultClonePath, "docker", "config", "airflow.cfg")
+	cfgFilePath := filepath.Join(r.opts.ClonePath, "docker", "config", "airflow.cfg")
 
 	// Load the local configuration file into a map
 	localConfig, err := ConvertAirflowCfgToMap(cfgFilePath)

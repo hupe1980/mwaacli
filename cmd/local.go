@@ -484,9 +484,15 @@ func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to load AWS configuration: %w", err)
 			}
 
-			mwaaClient := mwaa.NewClient(cfg)
-
 			ctx := context.Background()
+
+			runner, err := local.NewRunner()
+			if err != nil {
+				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
+			}
+			defer runner.Close()
+
+			mwaaClient := mwaa.NewClient(cfg)
 
 			// Get the MWAA environment name if not provided
 			if mwaaEnvName == "" {
@@ -502,7 +508,7 @@ func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to get MWAA environment: %w", err)
 			}
 
-			diffs, err := local.CompareAirflowConfigs(environment.AirflowConfigurationOptions)
+			diffs, err := runner.CompareAirflowConfigs(environment.AirflowConfigurationOptions)
 			if err != nil {
 				return fmt.Errorf("failed to compare configurations: %w", err)
 			}
