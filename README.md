@@ -66,6 +66,35 @@ Flags:
 Use "mwaacli [command] --help" for more information about a command.
 ```
 
+## 🔧 Setting Up the AWS MWAA Local Runner
+
+The AWS MWAA Local Runner allows you to test and develop workflows locally. Follow these steps to set up the local runner:
+
+1. **Initialize the Local Runner**:
+   Use the `mwaacli local init` command to clone and set up the AWS MWAA Local Runner repository:
+   ```sh
+   mwaacli local init
+   ```
+
+2. **Start the Local Runner**:
+   Start the local runner environment:
+   ```sh
+   mwaacli local start --port 8080
+   ```
+
+3. **Access the Airflow Web UI**:
+   Open your browser and navigate to:
+   ```
+   http://localhost:8080
+   ```
+
+4. **Follow Logs (Optional)**:
+   To follow the logs of the local runner, use the `--follow-logs` flag:
+   ```sh
+   mwaacli local start --port 8080 --follow-logs
+   ```
+
+For more details, refer to the [AWS MWAA Local Runner documentation](https://github.com/aws/aws-mwaa-local-runner).
 
 ## 🤝 Contributing
 
