@@ -90,21 +90,15 @@ func (r *Runner) BuildImage(ctx context.Context) error {
 }
 
 type StartOptions struct {
-	Port               string
-	ResetDB            bool
-	Envs               *Envs
-	FallowLogs         bool
-	OnLocalRunnerStart func() error
+	Port    string
+	ResetDB bool
+	Envs    *Envs
 }
 
-func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) error {
+func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) (string, error) {
 	opts := StartOptions{
-		Port:       "8080",
-		Envs:       nil,
-		FallowLogs: false,
-		OnLocalRunnerStart: func() error {
-			return nil
-		},
+		Port: "8080",
+		Envs: nil,
 	}
 
 	for _, fn := range optFns {
@@ -113,25 +107,25 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 
 	containers, err := r.client.ListContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel), false)
 	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
+		return "", fmt.Errorf("failed to list containers: %w", err)
 	}
 
 	if len(containers) > 0 {
-		return fmt.Errorf("airflow local environment is already running")
+		return "", fmt.Errorf("airflow local environment is already running")
 	}
 
 	if !util.IsPortFree(opts.Port) {
-		return fmt.Errorf("port %s is already in use", opts.Port)
+		return "", fmt.Errorf("port %s is already in use", opts.Port)
 	}
 
 	dockerComposeLocal, err := docker.ParseDockerCompose(filepath.Join(r.opts.ClonePath, "docker", "docker-compose-local.yml"))
 	if err != nil {
-		return fmt.Errorf("failed to parse docker-compose-local.yml: %w", err)
+		return "", fmt.Errorf("failed to parse docker-compose-local.yml: %w", err)
 	}
 
 	networkID, err := r.client.CreateNetwork(ctx, r.opts.NetworkName)
 	if err != nil {
-		return fmt.Errorf("failed to create network: %w", err)
+		return "", fmt.Errorf("failed to create network: %w", err)
 	}
 
 	logConfig := container.LogConfig{
@@ -155,22 +149,22 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 	if opts.ResetDB {
 		dbDataPath := filepath.Join(r.cwd, r.opts.ClonePath, "db-data")
 		if err := os.RemoveAll(dbDataPath); err != nil {
-			return fmt.Errorf("failed to clear database files: %w", err)
+			return "", fmt.Errorf("failed to clear database files: %w", err)
 		}
 
 		if err := os.MkdirAll(dbDataPath, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to recreate database directory: %w", err)
+			return "", fmt.Errorf("failed to recreate database directory: %w", err)
 		}
 	}
 
 	postgresImage, err := dockerComposeLocal.GetServiceImage("postgres")
 	if err != nil {
-		return fmt.Errorf("failed to get service image for postgres: %w", err)
+		return "", fmt.Errorf("failed to get service image for postgres: %w", err)
 	}
 
 	postgresEnv, err := dockerComposeLocal.GetServiceEnvironment("postgres")
 	if err != nil {
-		return fmt.Errorf("failed to get service environment for postgres: %w", err)
+		return "", fmt.Errorf("failed to get service environment for postgres: %w", err)
 	}
 
 	// Create Postgres container
@@ -194,16 +188,16 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 
 	postgresID, err := r.client.RunContainer(ctx, postgresConfig, postgresHostConfig, networkConfig, "postgres")
 	if err != nil {
-		return fmt.Errorf("failed to create and start Postgres container: %w", err)
+		return "", fmt.Errorf("failed to create and start Postgres container: %w", err)
 	}
 
 	if err := r.client.WaitForContainerReady(ctx, postgresID, 5*60); err != nil {
-		return fmt.Errorf("failed to wait for Postgres container: %w", err)
+		return "", fmt.Errorf("failed to wait for Postgres container: %w", err)
 	}
 
 	mwaaEnv, err := r.buildEnvironmentVariables(opts.Envs)
 	if err != nil {
-		return fmt.Errorf("failed to build environment variables: %w", err)
+		return "", fmt.Errorf("failed to build environment variables: %w", err)
 	}
 
 	// Create MWAA Local Runner container
@@ -234,18 +228,14 @@ func (r *Runner) Start(ctx context.Context, optFns ...func(o *StartOptions)) err
 
 	containerID, err := r.client.RunContainer(ctx, localRunnerConfig, localRunnerHostConfig, networkConfig, "local-runner")
 	if err != nil {
-		return fmt.Errorf("failed to create and start MWAA Local Runner container: %w", err)
+		return "", fmt.Errorf("failed to create and start MWAA Local Runner container: %w", err)
 	}
 
-	if err := opts.OnLocalRunnerStart(); err != nil {
-		return fmt.Errorf("failed to run OnLocalRunnerStart: %w", err)
-	}
+	return containerID, nil
+}
 
-	if opts.FallowLogs {
-		return r.client.ContainerLogs(ctx, containerID)
-	}
-
-	return nil
+func (r *Runner) Logs(ctx context.Context, containerID string) error {
+	return r.client.ContainerLogs(ctx, containerID)
 }
 
 func (r *Runner) Stop(ctx context.Context) error {

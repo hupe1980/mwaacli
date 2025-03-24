@@ -3,7 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -150,32 +153,61 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 				envs.Credentials = creds
 			}
 
-			if err := runner.Start(ctx, func(o *local.StartOptions) {
+			containerID, err := runner.Start(ctx, func(o *local.StartOptions) {
 				o.Port = port
 				o.ResetDB = resetDB
 				o.Envs = envs
-				o.FallowLogs = followLogs
-				o.OnLocalRunnerStart = func() error {
-					webserverURL := fmt.Sprintf("http://localhost:%s", port)
-
-					// Wait for the webserver to be ready
-					if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
-						return fmt.Errorf("application is not ready: %w", err)
-					}
-
-					if !noBrowser {
-						cmd.Println("Opening the Airflow UI in the default web browser...")
-						if err := util.OpenBrowser(webserverURL); err != nil {
-							return fmt.Errorf("failed to open the Airflow UI: %w", err)
-						}
-					} else {
-						cmd.Printf("You can access the Airflow UI at %s\n", webserverURL)
-					}
-
-					return nil
-				}
-			}); err != nil {
+			})
+			if err != nil {
 				return fmt.Errorf("failed to start AWS MWAA local runner environment: %w", err)
+			}
+
+			webserverURL := fmt.Sprintf("http://localhost:%s", port)
+
+			// Wait for the webserver to be ready
+			if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
+				return fmt.Errorf("application is not ready: %w", err)
+			}
+
+			if !noBrowser {
+				cmd.Println("Opening the Airflow UI in the default web browser...")
+				if err := util.OpenBrowser(webserverURL); err != nil {
+					return fmt.Errorf("failed to open the Airflow UI: %w", err)
+				}
+			} else {
+				cmd.Printf("You can access the Airflow UI at %s\n", webserverURL)
+			}
+
+			if followLogs {
+				cmd.Println("Following the logs of the Airflow webserver and scheduler...")
+
+				logsCtx, cancel := context.WithCancel(ctx)
+				defer cancel() // Ensure cancellation on exit
+
+				// Handle OS signals for graceful shutdown
+				sigChan := make(chan os.Signal, 1)
+				signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+				go func() {
+					<-sigChan
+					cmd.Println("\nReceived shutdown signal, stopping logs...")
+					cancel()
+				}()
+
+				// Run logs in a separate goroutine
+				logsErr := make(chan error, 1)
+				go func() {
+					logsErr <- runner.Logs(logsCtx, containerID)
+				}()
+
+				select {
+				case <-logsCtx.Done(): // Exit on context cancellation
+					cmd.Println("Shutting down log streaming...")
+					return runner.Stop(ctx)
+				case err := <-logsErr: // Capture log errors
+					if err != nil {
+						return fmt.Errorf("failed to follow logs: %w", err)
+					}
+				}
 			}
 
 			return nil
