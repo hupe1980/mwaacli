@@ -244,7 +244,7 @@ func (r *Runner) Stop(ctx context.Context) error {
 
 func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string) error {
 	const (
-		timeout  = 2 * time.Minute // Maximum wait time
+		timeout  = 5 * time.Minute // Maximum wait time
 		interval = 3 * time.Second // Polling interval
 	)
 

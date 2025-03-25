@@ -85,17 +85,19 @@ func (i *Installer) Run() error {
 		return fmt.Errorf("failed to get tree from commit: %w", err)
 	}
 
+	dagsPath := filepath.Join(i.cwd, i.opts.DagsPath)
+
+	skipDags, err := dagsPathExists(filepath.Join(dagsPath, "dags"))
+	if err != nil {
+		return fmt.Errorf("failed to check if dags path exists: %w", err)
+	}
+
 	err = tree.Files().ForEach(func(f *object.File) error {
 		if matched, _ := regexp.MatchString(`^(mwaa-local-env|.github)`, f.Name); matched {
 			// Skip files and directories
 			return nil
-		} else if strings.HasPrefix(f.Name, "dags") {
-			// Skip if dagsPath exists
-			if _, err := os.Stat(filepath.Join(i.cwd, i.opts.DagsPath)); err == nil {
-				return nil
-			}
-
-			return createFile(filepath.Join(i.cwd, i.opts.DagsPath), f)
+		} else if strings.HasPrefix(f.Name, "dags") && !skipDags {
+			return createFile(dagsPath, f)
 		} else if matched, _ := regexp.MatchString(`^(plugins|requirements|startup_script)`, f.Name); matched {
 			return createFile(filepath.Join(i.cwd, i.opts.ClonePath), f)
 		}
@@ -142,4 +144,17 @@ func createFile(path string, f *object.File) error {
 	}
 
 	return nil
+}
+
+func dagsPathExists(dagsPath string) (bool, error) {
+	_, err := os.Stat(dagsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil // Path does not exist
+		}
+
+		return false, err // Other errors (e.g., permission issues)
+	}
+
+	return true, nil // Path exists
 }
