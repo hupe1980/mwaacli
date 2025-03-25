@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"time"
@@ -24,6 +25,7 @@ import (
 
 type Client struct {
 	client *dockerClient.Client
+	logger *log.Logger
 }
 
 // NewClient initializes a new Docker client.
@@ -36,7 +38,11 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
-	client := &Client{client: c}
+	client := &Client{
+		client: c,
+		logger: log.New(os.Stderr, "", log.LstdFlags),
+	}
+
 	ctx := context.Background()
 
 	if err := client.Ping(ctx); err != nil {
@@ -116,7 +122,7 @@ func (c *Client) RunContainer(ctx context.Context, containerConfig *container.Co
 		return "", fmt.Errorf("failed to start container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Started container %s with ID %s\n", containerName, ShortContainerID(containerID))
+	c.logger.Printf("Started container %s with ID %s\n", containerName, ShortContainerID(containerID))
 
 	return containerID, nil
 }
@@ -178,7 +184,7 @@ func (c *Client) ensureContainer(ctx context.Context, containerConfig *container
 		return "", fmt.Errorf("failed to create container %s: %w", containerName, err)
 	}
 
-	fmt.Printf("Created new container %s with ID %s\n", containerName, ShortContainerID(resp.ID))
+	c.logger.Printf("Created new container %s with ID %s\n", containerName, ShortContainerID(resp.ID))
 
 	return resp.ID, nil
 }
@@ -193,13 +199,13 @@ func (c *Client) ensureImage(ctx context.Context, imageName string) error {
 	for _, img := range images {
 		for _, tag := range img.RepoTags {
 			if tag == imageName {
-				fmt.Printf("Image %s found locally. Skipping pull.\n", imageName)
+				c.logger.Printf("Image %s found locally. Skipping pull.\n", imageName)
 				return nil
 			}
 		}
 	}
 
-	fmt.Printf("Image %s not found locally. Attempting to pull...\n", imageName)
+	c.logger.Printf("Image %s not found locally. Attempting to pull...\n", imageName)
 
 	reader, err := c.client.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
@@ -213,7 +219,7 @@ func (c *Client) ensureImage(ctx context.Context, imageName string) error {
 		return fmt.Errorf("failed to read image pull output: %w", err)
 	}
 
-	fmt.Printf("Successfully pulled image: %s\n", imageName)
+	c.logger.Printf("Successfully pulled image: %s\n", imageName)
 
 	return nil
 }
@@ -236,12 +242,12 @@ func (c *Client) WaitForContainerReady(ctx context.Context, containerID string, 
 			}
 
 			if containerJSON.State.Running {
-				fmt.Printf("Container %s is now running.\n", ShortContainerID(containerID))
+				c.logger.Printf("Container %s is now running.\n", ShortContainerID(containerID))
 				return nil
 			}
 
 			if containerJSON.State.Restarting {
-				fmt.Printf("Container %s is restarting, waiting...\n", ShortContainerID(containerID))
+				c.logger.Printf("Container %s is restarting, waiting...\n", ShortContainerID(containerID))
 			} else if containerJSON.State.Dead || containerJSON.State.ExitCode != 0 {
 				return fmt.Errorf("container %s exited unexpectedly with code %d", ShortContainerID(containerID), containerJSON.State.ExitCode)
 			}
@@ -281,19 +287,19 @@ func (c *Client) StopContainersByLabel(ctx context.Context, label string) error 
 	}
 
 	if len(containers) == 0 {
-		fmt.Println("No running containers found for the specified label.")
+		c.logger.Printf("No running containers found for the specified label.")
 		return nil
 	}
 
 	for _, container := range containers {
-		fmt.Printf("Stopping container: %s\n", container.Names[0])
+		c.logger.Printf("Stopping container: %s\n", container.Names[0])
 
 		if err := c.StopContainer(ctx, container.ID); err != nil {
 			return fmt.Errorf("failed to stop container %s: %w", container.Names[0], err)
 		}
 	}
 
-	fmt.Println("All containers with the specified label have been stopped.")
+	c.logger.Printf("All containers with the specified label have been stopped.")
 
 	return nil
 }
@@ -307,7 +313,7 @@ func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string,
 
 	for _, net := range networks {
 		if net.Name == networkName {
-			fmt.Println("Network already exists:", networkName)
+			c.logger.Printf("Network already exists:", networkName)
 			return net.ID, nil
 		}
 	}
@@ -319,7 +325,7 @@ func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string,
 		return "", fmt.Errorf("failed to create network: %w", err)
 	}
 
-	fmt.Println("Created network:", networkName)
+	c.logger.Printf("Created network:", networkName)
 
 	return resp.ID, nil
 }

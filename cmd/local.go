@@ -55,7 +55,7 @@ func newInitCommand(_ *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Setting up the AWS MWAA local runner...")
+			cmd.Println(cyan("[INFO]"), "Setting up the AWS MWAA local runner...")
 
 			installer, err := local.NewInstaller(version, func(o *local.InstallerOptions) {
 				o.RepoURL = repoURL
@@ -68,7 +68,7 @@ func newInitCommand(_ *globalOptions) *cobra.Command {
 				return err
 			}
 
-			cmd.Println("AWS MWAA local runner setup complete.")
+			cmd.Println(green("[SUCCESS]"), "AWS MWAA local runner setup complete.")
 
 			return nil
 		},
@@ -87,7 +87,7 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Building the Docker image for the AWS MWAA local runner...")
+			cmd.Println(cyan("[INFO]"), "Building the Docker image for the AWS MWAA local runner...")
 
 			runner, err := local.NewRunner()
 			if err != nil {
@@ -101,7 +101,7 @@ func newBuildImageCommand(_ *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to build Docker image: %w", err)
 			}
 
-			cmd.Println("Docker image built successfully.")
+			cmd.Println(green("[SUCCESS]"), "Docker image built successfully.")
 
 			return nil
 		},
@@ -126,7 +126,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Starting the AWS MWAA local runner environment...")
+			cmd.Println(cyan("[INFO]"), "Starting the AWS MWAA local runner environment...")
 
 			ctx := context.Background()
 
@@ -140,7 +140,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to build Docker image: %w", err)
 			}
 
-			cmd.Println("Docker image built successfully.")
+			cmd.Println(green("[SUCCESS]"), "Docker image built successfully.")
 
 			var envs *local.Envs
 
@@ -170,16 +170,16 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 			}
 
 			if !noBrowser {
-				cmd.Println("Opening the Airflow UI in the default web browser...")
+				cmd.Println(cyan("[INFO]"), "Opening the Airflow UI in the default web browser...")
 				if err := util.OpenBrowser(webserverURL); err != nil {
 					return fmt.Errorf("failed to open the Airflow UI: %w", err)
 				}
 			} else {
-				cmd.Printf("You can access the Airflow UI at %s\n", webserverURL)
+				cmd.Printf(green("[SUCCESS]"), "You can access the Airflow UI at %s\n", webserverURL)
 			}
 
 			if followLogs {
-				cmd.Println("Following the logs of the Airflow webserver and scheduler...")
+				cmd.Println(cyan("[INFO]"), "Following the logs of the Airflow webserver and scheduler...")
 
 				logsCtx, cancel := context.WithCancel(ctx)
 				defer cancel() // Ensure cancellation on exit
@@ -189,7 +189,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 				signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 				go func() {
 					<-sigChan
-					cmd.Println("\nReceived shutdown signal, stopping logs...")
+					cmd.Println(cyan("[INFO]"), "\nReceived shutdown signal, stopping logs...")
 					cancel()
 				}()
 
@@ -201,7 +201,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 				select {
 				case <-logsCtx.Done(): // Exit on context cancellation
-					cmd.Println("Shutting down log streaming...")
+					cmd.Println(cyan("[INFO]"), "Shutting down log streaming...")
 					return runner.Stop(ctx)
 				case err := <-logsErr: // Capture log errors
 					if err != nil {
@@ -231,7 +231,8 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Stopping the AWS MWAA local runner environment...")
+			cmd.Println(cyan("[INFO]"), "Stopping the AWS MWAA local runner environment...")
+
 			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
@@ -243,7 +244,7 @@ func newStopCommand(_ *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to stop AWS MWAA local runner environment: %w", err)
 			}
 
-			cmd.Println("AWS MWAA local runner environment stopped successfully.")
+			cmd.Println(green("[SUCCESS]"), "AWS MWAA local runner environment stopped successfully.")
 
 			return nil
 		},
@@ -259,15 +260,15 @@ func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Testing requirements installation in an ephemeral container...")
-
-			ctx := context.Background()
+			cmd.Println(cyan("[INFO]"), "Testing requirements installation in an ephemeral container...")
 
 			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
 			defer runner.Close()
+
+			ctx := context.Background()
 
 			// Ensure image is built
 			if err := runner.BuildImage(ctx); err != nil {
@@ -278,7 +279,7 @@ func newTestRequirementsCommand(_ *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to test requirements installation: %w", err)
 			}
 
-			cmd.Println("Requirements installed successfully in the test container.")
+			cmd.Println(green("[SUCCESS]"), "Requirements installed successfully in the test container.")
 
 			return nil
 		},
@@ -294,15 +295,15 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Packaging Python requirements into a ZIP file...")
-
-			ctx := context.Background()
+			cmd.Println(cyan("[INFO]"), "Packaging Python requirements into a ZIP file...")
 
 			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
 			defer runner.Close()
+
+			ctx := context.Background()
 
 			// Ensure image is built
 			if err := runner.BuildImage(ctx); err != nil {
@@ -313,7 +314,7 @@ func newPackageRequirementsCommand(_ *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to package requirements: %w", err)
 			}
 
-			cmd.Println("Python requirements packaged successfully.")
+			cmd.Println(green("[SUCCESS]"), "Python requirements packaged successfully.")
 
 			return nil
 		},
@@ -334,14 +335,15 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println("Testing startup script execution in an ephemeral container...")
+			cmd.Println(cyan("[INFO]"), "Testing startup script execution in an ephemeral container...")
 
-			ctx := context.Background()
 			runner, err := local.NewRunner()
 			if err != nil {
 				return fmt.Errorf("failed to create AWS MWAA local runner: %w", err)
 			}
 			defer runner.Close()
+
+			ctx := context.Background()
 
 			// Ensure image is built
 			if err := runner.BuildImage(ctx); err != nil {
@@ -366,7 +368,7 @@ func newTestStartupScriptCommand(globalOpts *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to execute startup script: %w", err)
 			}
 
-			cmd.Println("Startup script executed successfully in the test container.")
+			cmd.Println(green("[SUCCESS]"), "Startup script executed successfully in the test container.")
 
 			return nil
 		},
@@ -390,6 +392,8 @@ func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Println(cyan("[INFO]"), "Syncing the Airflow configuration with the remote MWAA environment...")
+
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
 				return err
@@ -459,6 +463,8 @@ func newSyncCommand(globalOpts *globalOptions) *cobra.Command {
 				cmd.Println("No remote DAGs path configured.")
 			}
 
+			cmd.Println(green("[SUCCESS]"), "Airflow configuration synced successfully.")
+
 			return nil
 		},
 	}
@@ -479,6 +485,8 @@ func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Println(cyan("[INFO]"), "Comparing local Airflow configuration with the remote MWAA configuration...")
+
 			cfg, err := config.NewConfig(globalOpts.profile, globalOpts.region)
 			if err != nil {
 				return fmt.Errorf("failed to load AWS configuration: %w", err)
@@ -526,7 +534,7 @@ func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
 
 func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL string) error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Prefix = "Waiting for the Airflow webserver to be ready... "
+	s.Prefix = fmt.Sprintf("%s %s", cyan("[INFO]"), "Waiting for the Airflow webserver to be ready... ")
 	s.Start()
 
 	defer s.Stop()
@@ -537,7 +545,7 @@ func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL st
 		return fmt.Errorf("application is not ready: %w", err)
 	}
 
-	s.FinalMSG = "AWS MWAA local runner environment started successfully!\n"
+	s.FinalMSG = fmt.Sprintf("%s %s", green("[SUCCESS]"), "AWS MWAA local runner environment started successfully!\n")
 
 	return nil
 }

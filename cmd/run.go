@@ -46,8 +46,6 @@ for a list of supported commands.`,
 			// Combine command arguments into a single string
 			command := strings.Join(args, " ")
 
-			fmt.Println(command)
-
 			// Invoke the Airflow CLI command in the specified MWAA environment
 			_, stdout, stderr, err := client.InvokeCliCommand(ctx, mwaaEnvName, command)
 			if err != nil {

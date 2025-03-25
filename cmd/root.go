@@ -11,16 +11,26 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/hupe1980/mwaacli/pkg/mwaa"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
+)
+
+var (
+	cyan  = color.New(color.FgCyan).SprintFunc()
+	green = color.New(color.FgGreen).SprintFunc()
+	red   = color.New(color.FgRed, color.Bold).SprintFunc()
 )
 
 // Execute initializes and runs the root command for the CLI.
 // It takes a version string as an argument and sets up the command execution.
 func Execute(version string) {
 	rootCmd := newRootCmd(version)
-	cobra.CheckErr(rootCmd.Execute())
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, red("[ERROR]"), fmt.Sprintf("%s", err))
+		os.Exit(1)
+	}
 }
 
 // globalOptions holds common flags for AWS interaction.

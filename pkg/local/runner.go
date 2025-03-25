@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,6 +33,7 @@ type Runner struct {
 	client         *docker.Client
 	cwd            string
 	opts           RunnerOptions
+	logger         *log.Logger
 }
 
 // NewRunner creates a new MWAA installer
@@ -75,6 +77,7 @@ func NewRunner(optFns ...func(o *RunnerOptions)) (*Runner, error) {
 		client:         client,
 		cwd:            cwd,
 		opts:           opts,
+		logger:         log.New(os.Stdout, "[Runner] ", log.LstdFlags),
 	}, nil
 }
 

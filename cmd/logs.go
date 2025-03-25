@@ -40,8 +40,9 @@ func newLogsCommand(globalOpts *globalOptions) *cobra.Command {
 				return fmt.Errorf("failed to initialize AWS config: %w", err)
 			}
 
-			ctx := context.Background()
 			client := mwaa.NewClient(cfg)
+
+			ctx := context.Background()
 
 			// Get environment name if not provided
 			if mwaaEnvName == "" {
@@ -99,7 +100,7 @@ func newLogsCommand(globalOpts *globalOptions) *cobra.Command {
 
 			// Print logs with timestamp and log group name
 			for _, log := range logs {
-				cmd.Printf("[%s] [%s] %s\n", time.UnixMilli(log.Timestamp).Format(time.RFC3339), log.LogGroup, log.Message)
+				cmd.Printf("[%s] %s\n", log.LogGroup, log.Message)
 			}
 
 			return nil

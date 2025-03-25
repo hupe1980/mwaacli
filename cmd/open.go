@@ -48,7 +48,7 @@ func newOpenCommand(globalOpts *globalOptions) *cobra.Command {
 			webserverURL := fmt.Sprintf("https://%s/aws_mwaa/aws-console-sso?login=true#%s",
 				aws.ToString(webLoginTokenOutput.WebServerHostname), aws.ToString(webLoginTokenOutput.WebToken))
 
-			cmd.Printf("Opening webserver at: %s\n", webserverURL)
+			cmd.Printf(cyan("[INFO]"), "Opening webserver at: %s\n", webserverURL)
 
 			return util.OpenBrowser(webserverURL)
 		},
