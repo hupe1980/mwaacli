@@ -287,7 +287,7 @@ func (c *Client) StopContainersByLabel(ctx context.Context, label string) error 
 	}
 
 	if len(containers) == 0 {
-		c.logger.Printf("No running containers found for the specified label.")
+		c.logger.Println("No running containers found for the specified label.")
 		return nil
 	}
 
@@ -299,7 +299,7 @@ func (c *Client) StopContainersByLabel(ctx context.Context, label string) error 
 		}
 	}
 
-	c.logger.Printf("All containers with the specified label have been stopped.")
+	c.logger.Println("All containers with the specified label have been stopped.")
 
 	return nil
 }
@@ -313,7 +313,7 @@ func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string,
 
 	for _, net := range networks {
 		if net.Name == networkName {
-			c.logger.Printf("Network already exists:", networkName)
+			c.logger.Println("Network already exists:", networkName)
 			return net.ID, nil
 		}
 	}
@@ -325,7 +325,7 @@ func (c *Client) CreateNetwork(ctx context.Context, networkName string) (string,
 		return "", fmt.Errorf("failed to create network: %w", err)
 	}
 
-	c.logger.Printf("Created network:", networkName)
+	c.logger.Println("Created network:", networkName)
 
 	return resp.ID, nil
 }
