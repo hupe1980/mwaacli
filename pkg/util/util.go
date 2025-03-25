@@ -1,3 +1,6 @@
+// Package util provides utility functions and helpers for common operations used across the application.
+// These utilities include functions for working with environment variables, file paths, ports, AWS ARNs,
+// and more. The package is designed to simplify repetitive tasks and ensure consistency.
 package util
 
 import (

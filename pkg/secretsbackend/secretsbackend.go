@@ -1,3 +1,9 @@
+// Package secretsbackend provides an abstraction layer for managing secrets in Apache Airflow
+// environments configured with AWS MWAA. It supports integration with AWS Secrets Manager
+// and Systems Manager Parameter Store as secrets backends.
+//
+// This package simplifies the interaction with secrets backends by providing methods to list,
+// retrieve, and update secrets for Airflow connections and variables.
 package secretsbackend
 
 import (
@@ -79,6 +85,7 @@ func (c *Client) ListVariables(ctx context.Context) ([]string, error) {
 	return c.list(ctx, prefix, pattern)
 }
 
+// list retrieves a list of secrets based on the provided prefix and pattern.
 func (c *Client) list(ctx context.Context, prefix, pattern string) ([]string, error) {
 	secrets, err := c.secretsBackend.ListSecrets(ctx, prefix)
 	if err != nil {
