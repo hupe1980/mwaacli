@@ -118,6 +118,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 		awsCreds   bool
 		roleARN    string
 		followLogs bool
+		waitTime   time.Duration // Add wait time flag
 	)
 
 	cmd := &cobra.Command{
@@ -165,7 +166,15 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 			webserverURL := fmt.Sprintf("http://localhost:%s", port)
 
 			// Wait for the webserver to be ready
-			if err := waitForWebserver(ctx, runner, webserverURL); err != nil {
+			if err := waitForWebserver(ctx, runner, webserverURL, waitTime); err != nil {
+				cmd.Println(cyan("[INFO]"), "Webserver did not become healthy within the wait time. Stopping the containers...")
+
+				// Attempt to stop the container gracefully
+				stopErr := runner.Stop(ctx)
+				if stopErr != nil {
+					cmd.Println(cyan("[ERROR]"), "Failed to stop the containers:", stopErr)
+				}
+
 				return fmt.Errorf("application is not ready: %w", err)
 			}
 
@@ -220,6 +229,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 	cmd.Flags().StringVar(&port, "port", "8080", "Specify the port for the Airflow webserver")
 	cmd.Flags().BoolVar(&awsCreds, "aws-creds", false, "Start the AWS MWAA local runner with AWS credentials")
 	cmd.Flags().StringVar(&roleARN, "role-arn", "", "Specify the IAM Role ARN to use for the AWS MWAA local runner")
+	cmd.Flags().DurationVar(&waitTime, "wait", 5*time.Minute, "Amount of time to wait for the webserver to get healthy before timing out (e.g., 30s, 5m).")
 
 	return cmd
 }
@@ -532,7 +542,7 @@ func newDiffCommand(globalOpts *globalOptions) *cobra.Command {
 	return cmd
 }
 
-func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL string) error {
+func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL string, waitTime time.Duration) error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	s.Prefix = fmt.Sprintf("%s %s", cyan("[INFO]"), "Waiting for the Airflow webserver to be ready... ")
 	s.Start()
@@ -540,9 +550,9 @@ func waitForWebserver(ctx context.Context, runner *local.Runner, webserverURL st
 	defer s.Stop()
 
 	// Wait for the webserver to be ready
-	err := runner.WaitForWebserverReady(ctx, fmt.Sprintf("%s/health", webserverURL))
+	err := runner.WaitForWebserverReady(ctx, fmt.Sprintf("%s/health", webserverURL), waitTime)
 	if err != nil {
-		return fmt.Errorf("application is not ready: %w", err)
+		return err
 	}
 
 	s.FinalMSG = fmt.Sprintf("%s %s", green("[SUCCESS]"), "AWS MWAA local runner environment started successfully!\n")

@@ -245,12 +245,7 @@ func (r *Runner) Stop(ctx context.Context) error {
 	return r.client.StopContainersByLabel(ctx, fmt.Sprintf("%s=%s", LabelKey, r.opts.ContainerLabel))
 }
 
-func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string) error {
-	const (
-		timeout  = 5 * time.Minute // Maximum wait time
-		interval = 3 * time.Second // Polling interval
-	)
-
+func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string, waitTime time.Duration) error {
 	parsedURL, err := url.ParseRequestURI(webserverURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
@@ -260,16 +255,13 @@ func (r *Runner) WaitForWebserverReady(ctx context.Context, webserverURL string)
 		return errors.New("unsupported URL scheme, must be http or https")
 	}
 
-	// Create an HTTP client with a timeout for individual requests
-	client := &http.Client{
-		Timeout: 10 * time.Second, // Prevent hanging requests
-	}
+	client := &http.Client{}
 
 	// Create a context with timeout for the entire operation
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(3 * time.Second) // Polling interval
 	defer ticker.Stop()
 
 	for {
