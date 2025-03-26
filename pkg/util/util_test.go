@@ -184,3 +184,49 @@ func TestMergeEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestStripNonPrintable(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Only printable characters",
+			input:    "Hello, World!\n",
+			expected: "Hello, World!\n",
+		},
+		{
+			name:     "Non-printable characters",
+			input:    "Hello\x00, World!\x07\n",
+			expected: "Hello, World!\n",
+		},
+		{
+			name:     "Mixed printable and non-printable characters",
+			input:    "\x01Hello\x02, \x03World!\x04\n",
+			expected: "Hello, World!\n",
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Only non-printable characters",
+			input:    "\x00\x01\x02\x03\x04",
+			expected: "",
+		},
+		{
+			name:     "String with tabs and newlines",
+			input:    "Hello\tWorld!\n",
+			expected: "Hello\tWorld!\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StripNonPrintable(tt.input)
+			assert.Equal(t, tt.expected, result, "they should be equal")
+		})
+	}
+}

@@ -65,6 +65,7 @@ func newGetEnvironmentCommand(globalOpts *globalOptions) *cobra.Command {
 			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
+
 			var mwaaEnvName string
 			if len(args) > 0 {
 				mwaaEnvName = args[0]

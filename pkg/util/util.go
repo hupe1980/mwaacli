@@ -228,7 +228,7 @@ func Unzip(data []byte, dest string) error {
 
 // StripNonPrintable removes non-printable characters from a string.
 func StripNonPrintable(input string) string {
-	// Match printable ASCII characters (32-126) and newline (10)
-	re := regexp.MustCompile(`[^\x20-\x7E\n]`)
+	// Match printable ASCII characters (32-126), newline (10), and tab (9)
+	re := regexp.MustCompile(`[^\x09\x20-\x7E\n]`)
 	return re.ReplaceAllString(input, "")
 }

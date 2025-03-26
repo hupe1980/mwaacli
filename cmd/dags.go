@@ -53,6 +53,7 @@ func newListDagsCommand(globalOpts *globalOptions) *cobra.Command {
 			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
+
 			if mwaaEnvName == "" {
 				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {
@@ -138,6 +139,7 @@ func newGetDagCommand(globalOpts *globalOptions) *cobra.Command {
 			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
+
 			if mwaaEnvName == "" {
 				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {
@@ -190,6 +192,7 @@ func newGetDagSourceCommand(globalOpts *globalOptions) *cobra.Command {
 			client := mwaa.NewClient(cfg)
 
 			ctx := context.Background()
+
 			if mwaaEnvName == "" {
 				mwaaEnvName, err = getEnvironment(ctx, client)
 				if err != nil {

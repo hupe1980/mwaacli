@@ -66,7 +66,7 @@ func (s *SecretsManagerClient) GetSecretValue(ctx context.Context, secretID stri
 		return "", fmt.Errorf("secret value is nil")
 	}
 
-	return *result.SecretString, nil
+	return aws.ToString(result.SecretString), nil
 }
 
 // UpdateSecretValue updates the value of a given secret ID.
