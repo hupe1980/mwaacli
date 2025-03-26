@@ -198,7 +198,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 				signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 				go func() {
 					<-sigChan
-					cmd.Println(cyan("[INFO]"), "\nReceived shutdown signal, stopping logs...")
+					cmd.Println(cyan("[INFO]"), "Received shutdown signal, stopping local runner...")
 					cancel()
 				}()
 
@@ -210,8 +210,12 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 				select {
 				case <-logsCtx.Done(): // Exit on context cancellation
-					cmd.Println(cyan("[INFO]"), "Shutting down log streaming...")
-					return runner.Stop(ctx)
+					cmd.Println(cyan("[INFO]"), "Shutting down AWS MWAA local runner...")
+					if err := runner.Stop(ctx); err != nil {
+						return fmt.Errorf("failed to stop AWS MWAA local runner environment: %w", err)
+					}
+
+					cmd.Println(green("[SUCCESS]"), "AWS MWAA local runner environment stopped successfully.")
 				case err := <-logsErr: // Capture log errors
 					if err != nil {
 						return fmt.Errorf("failed to follow logs: %w", err)
