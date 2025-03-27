@@ -4,7 +4,7 @@
 [![goreportcard](https://goreportcard.com/badge/github.com/hupe1980/mwaacli)](https://goreportcard.com/report/github.com/hupe1980/mwaacli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 > **mwaacli** is a command-line interface (CLI) for interacting with Amazon Managed Workflows for Apache Airflow (MWAA).  
-It provides an easy way to manage MWAA environments, execute Airflow CLI commands, and open the MWAA web UI.
+It simplifies the management of MWAA environments, allows execution of Airflow CLI commands, provides quick access to the MWAA web UI, and supports the AWS MWAA Local Runner for local testing and development.
 
 ## 🚀 Features
 

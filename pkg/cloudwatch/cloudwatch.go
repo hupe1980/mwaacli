@@ -1,3 +1,6 @@
+// Package cloudwatch provides a client for interacting with Amazon CloudWatch Logs.
+// It simplifies fetching and filtering log events from CloudWatch log groups, enabling
+// efficient log retrieval and processing.
 package cloudwatch
 
 import (
@@ -11,29 +14,34 @@ import (
 	"github.com/hupe1980/mwaacli/pkg/config"
 )
 
-// LogEvent represents a CloudWatch log event
+// LogEvent represents a CloudWatch log event.
 type LogEvent struct {
-	Timestamp int64
-	Message   string
-	LogGroup  string
+	Timestamp int64  // The timestamp of the log event in milliseconds since the epoch.
+	Message   string // The message content of the log event.
+	LogGroup  string // The name of the log group where the event was logged.
 }
 
+// Client provides methods to interact with Amazon CloudWatch Logs.
 type Client struct {
-	client *cloudwatchlogs.Client
+	client *cloudwatchlogs.Client // The AWS CloudWatch Logs client.
 }
 
+// NewClient initializes a new CloudWatch Logs client using the provided configuration.
 func NewClient(cfg *config.Config) *Client {
 	return &Client{
 		client: cloudwatchlogs.NewFromConfig(cfg.AWSConfig),
 	}
 }
 
+// LogFilter defines the filtering criteria for fetching log events.
 type LogFilter struct {
-	StartTime     *int64
-	EndTime       *int64
-	FilterPattern *string
+	StartTime     *int64  // The start time for the log events in milliseconds since the epoch.
+	EndTime       *int64  // The end time for the log events in milliseconds since the epoch.
+	FilterPattern *string // The filter pattern to match log events.
 }
 
+// FetchLogs retrieves log events from the specified CloudWatch log groups based on the provided filter.
+// This method fetches logs from multiple log groups, applies the filter, and sorts the logs by timestamp.
 func (c *Client) FetchLogs(ctx context.Context, logGroupARNs []string, filter *LogFilter) ([]LogEvent, error) {
 	var allLogs []LogEvent
 
@@ -59,6 +67,8 @@ func (c *Client) FetchLogs(ctx context.Context, logGroupARNs []string, filter *L
 	return allLogs, nil
 }
 
+// getFilteredLogs retrieves filtered log events from a specific CloudWatch log group.
+// This method uses a paginator to fetch all pages of log events that match the filter criteria.
 func (c *Client) getFilteredLogs(ctx context.Context, logGroupName string, filter *LogFilter) ([]LogEvent, error) {
 	var logs []LogEvent
 
@@ -90,7 +100,8 @@ func (c *Client) getFilteredLogs(ctx context.Context, logGroupName string, filte
 	return logs, nil
 }
 
-// Extracts log group name from ARN
+// extractLogGroupName extracts the log group name from a CloudWatch log group ARN.
+// The ARN must follow the standard format for CloudWatch log group ARNs.
 func extractLogGroupName(arn string) (string, error) {
 	parts := strings.SplitN(arn, ":", 6)
 	if len(parts) < 6 {
