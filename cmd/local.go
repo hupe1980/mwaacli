@@ -143,7 +143,7 @@ func newStartCommand(globalOpts *globalOptions) *cobra.Command {
 
 			cmd.Println(green("[SUCCESS]"), "Docker image built successfully.")
 
-			var envs *local.Envs
+			envs := &local.Envs{}
 
 			if awsCreds {
 				creds, err := retrieveAWSCredentials(ctx, globalOpts.profile, globalOpts.region, roleARN)
