@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"runtime"
@@ -156,6 +157,38 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string) error {
 	}
 
 	return nil
+}
+
+// AttachToContainer attaches to a running container's input, output, and error streams.
+func (c *Client) AttachToContainer(ctx context.Context, containerID string) error {
+	// Attach to the container
+	resp, err := c.client.ContainerAttach(ctx, containerID, container.AttachOptions{
+		Stream: true,
+		Stdin:  true,
+		Stdout: true,
+		Stderr: true,
+		Logs:   true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to attach to container %s: %w", containerID, err)
+	}
+	defer resp.Close()
+
+	// Stream the container's output to the terminal
+	go func() {
+		if _, err := io.Copy(os.Stdout, resp.Reader); err != nil {
+			c.logger.Printf("error streaming container output: %v\n", err)
+		}
+	}()
+
+	// Wait for the container to finish
+	statusCh, errCh := c.client.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+	select {
+	case <-statusCh:
+		return nil
+	case err := <-errCh:
+		return fmt.Errorf("error waiting for container %s: %w", containerID, err)
+	}
 }
 
 // ensureContainer ensures the container exists, creating it if necessary.

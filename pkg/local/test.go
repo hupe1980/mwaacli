@@ -11,8 +11,13 @@ import (
 
 func (r *Runner) TestRequirements(ctx context.Context) error {
 	requirementsConfig := &container.Config{
-		Image: fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
-		Cmd:   []string{"test-requirements"},
+		Image:        fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
+		Cmd:          []string{"test-requirements"},
+		Tty:          true, // Allocate a pseudo-TTY
+		OpenStdin:    true, // Keep stdin open for interactive mode
+		AttachStdin:  true, // Attach stdin for interaction
+		AttachStdout: true, // Attach stdout for output
+		AttachStderr: true, // Attach stderr for error output
 	}
 
 	hostConfig := &container.HostConfig{
@@ -24,7 +29,15 @@ func (r *Runner) TestRequirements(ctx context.Context) error {
 		},
 	}
 
-	_, err := r.client.RunContainer(ctx, requirementsConfig, hostConfig, nil, "test-requirements")
+	containerID, err := r.client.RunContainer(ctx, requirementsConfig, hostConfig, nil, "test-requirements")
+	if err != nil {
+		return fmt.Errorf("failed to run container: %w", err)
+	}
+
+	// Attach to the container for interactive mode
+	if err := r.client.AttachToContainer(ctx, containerID); err != nil {
+		return fmt.Errorf("failed to attach to container: %w", err)
+	}
 
 	return err
 }
@@ -45,9 +58,14 @@ func (r *Runner) TestStartupScript(ctx context.Context, optFns ...func(o *TestSt
 	mwaaEnv := opts.Envs.ToSlice()
 
 	startupConfig := &container.Config{
-		Image: fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
-		Env:   mwaaEnv,
-		Cmd:   []string{"test-startup-script"},
+		Image:        fmt.Sprintf("amazon/mwaa-local:%s", convertVersion(r.airflowVersion)),
+		Env:          mwaaEnv,
+		Cmd:          []string{"test-startup-script"},
+		Tty:          true, // Allocate a pseudo-TTY
+		OpenStdin:    true, // Keep stdin open for interactive mode
+		AttachStdin:  true, // Attach stdin for interaction
+		AttachStdout: true, // Attach stdout for output
+		AttachStderr: true, // Attach stderr for error output
 	}
 
 	hostConfig := &container.HostConfig{
@@ -56,7 +74,16 @@ func (r *Runner) TestStartupScript(ctx context.Context, optFns ...func(o *TestSt
 		},
 	}
 
-	_, err := r.client.RunContainer(ctx, startupConfig, hostConfig, nil, "test-startup-script")
+	// Run the container
+	containerID, err := r.client.RunContainer(ctx, startupConfig, hostConfig, nil, "test-startup-script")
+	if err != nil {
+		return fmt.Errorf("failed to run container: %w", err)
+	}
 
-	return err
+	// Attach to the container for interactive mode
+	if err := r.client.AttachToContainer(ctx, containerID); err != nil {
+		return fmt.Errorf("failed to attach to container: %w", err)
+	}
+
+	return nil
 }
